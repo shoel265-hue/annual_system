@@ -1,0 +1,3626 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>통합 연차 관리 및 퇴사 정산 시스템</title>
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css' rel='stylesheet' />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', -apple-system, '맑은 고딕', sans-serif; }
+        body { background-color: #f1f5f9; color: #333; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+
+        .top-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .team-select-box {
+            display: inline-flex;
+            align-items: center;
+            background-color: #1e293b;
+            color: white;
+            padding: 4px 6px 4px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .team-select-box span {
+            margin-right: 8px;
+            white-space: nowrap;
+        }
+
+        .team-select-box select {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            outline: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 6px center;
+            background-size: 18px;
+            padding-right: 28px;
+        }
+
+        .team-select-box select:hover { background-color: #2563eb; }
+
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            border: 1px solid #cbd5e1;
+            background: white;
+            color: #334155;
+            transition: all 0.2s;
+        }
+        .action-btn:hover { background: #f8fafc; }
+        .action-btn.blue { border-color: #3b82f6; color: #2563eb; background: #eff6ff; }
+        .action-btn.yellow { border-color: #f59e0b; color: #d97706; background: #fffbeb; }
+        .action-btn.purple { border-color: #8b5cf6; color: #7c3aed; background: #f5f3ff; }
+        .action-btn.red { border-color: #ef4444; color: #dc2626; background: #fef2f2; }
+
+        .nav-tabs-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #cbd5e1;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .nav-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
+        .tab-btn { padding: 10px 20px; border: none; background: #e2e8f0; color: #475569; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+        .tab-btn.active { background: #3b82f6; color: white; }
+        .tab-btn.admin-tab { background: #1e293b; color: #f8fafc; }
+        .tab-btn.admin-tab.active { background: #0f172a; color: #38bdf8; border: 1px solid #38bdf8; }
+        .tab-btn.calendar-tab { background: #047857; color: #f8fafc; }
+        .tab-btn.calendar-tab.active { background: #065f46; color: #34d399; border: 1px solid #34d399; }
+
+        .admin-year-container { display: none; }
+        .admin-year-container.active { display: flex; }
+
+        .card { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 20px; }
+        h1, h2 { color: #1e293b; margin-bottom: 15px; font-size: 20px; }
+        
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group.full { grid-column: 1 / -1; }
+        label { font-size: 13px; font-weight: bold; color: #475569; }
+        input, select, textarea { padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; outline: none; }
+        
+        .table-input {
+            width: 50px !important;
+            padding: 4px 2px !important;
+            text-align: center !important;
+            font-size: 13px !important;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+        }
+
+        .dashboard-table th.settlement-col,
+        .dashboard-table td.settlement-col,
+        .dashboard-table th.prev-year-header,
+        .dashboard-table td.prev-year-col,
+        .dashboard-table th.annual-usage-col,
+        .dashboard-table td.annual-usage-col,
+        .dashboard-table th.half-usage-col,
+        .dashboard-table td.half-usage-col,
+        .dashboard-table th.substitute-usage-col,
+        .dashboard-table td.substitute-usage-col,
+        .dashboard-table th.congrat-usage-col,
+        .dashboard-table td.congrat-usage-col,
+        .dashboard-table th.edu-usage-col,
+        .dashboard-table td.edu-usage-col {
+            padding-left: 3px;
+            padding-right: 3px;
+            white-space: normal;
+        }
+
+        .dashboard-table th.settlement-col,
+        .dashboard-table td.settlement-col,
+        .dashboard-table th.prev-year-header,
+        .dashboard-table td.prev-year-col,
+        .dashboard-table th.annual-usage-col,
+        .dashboard-table td.annual-usage-col { width: 68px; }
+
+        .dashboard-table th.half-usage-col,
+        .dashboard-table td.half-usage-col { width: 58px; }
+
+        .dashboard-table th.substitute-usage-col,
+        .dashboard-table td.substitute-usage-col { width: 82px; }
+
+        .dashboard-table th.congrat-usage-col,
+        .dashboard-table td.congrat-usage-col,
+        .dashboard-table th.edu-usage-col,
+        .dashboard-table td.edu-usage-col { width: 60px; }
+
+        .edit-table-input {
+            width: 100% !important;
+            padding: 4px 6px !important;
+            font-size: 12px !important;
+            border: 1px solid #3b82f6;
+            border-radius: 4px;
+            background: #fff;
+        }
+        .edit-table-select {
+            width: 100% !important;
+            padding: 4px 4px !important;
+            font-size: 12px !important;
+            border: 1px solid #3b82f6;
+            border-radius: 4px;
+            background: #fff;
+        }
+
+        .category-select {
+            width: 115px;
+            padding: 3px 18px 3px 6px;
+            font-size: 11px;
+            text-align: left;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            background-color: #fff;
+            cursor: pointer;
+        }
+        .table-input:disabled {
+            background-color: #f1f5f9;
+            color: #94a3b8;
+            border-color: #e2e8f0;
+        }
+
+        .table-date-input {
+            width: 115px !important;
+            padding: 4px 2px !important;
+            font-size: 12px !important;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+        }
+
+        details.fold-box > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px; user-select: none; }
+        details.fold-box > summary::-webkit-details-marker { display: none; }
+        details.fold-box > summary::before { content: '▶'; font-size: 13px; color: #64748b; transition: transform 0.15s; }
+        details.fold-box[open] > summary::before { transform: rotate(90deg); }
+        details.fold-box > summary h2 { margin: 0; }
+        details.fold-box > summary::after { content: '클릭하여 펼치기'; font-size: 12px; color: #94a3b8; font-weight: normal; }
+        details.fold-box[open] > summary::after { content: '클릭하여 접기'; }
+        details.fold-box .fold-body { margin-top: 14px; }
+
+        .btn-group { margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end; }
+        .btn { padding: 9px 18px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-secondary { background: #64748b; color: white; }
+        .btn-danger { background: #ef4444; color: white; }
+        
+        .btn-info { background: #0284c7; color: white; padding: 7px 14px; font-size: 13px; border-radius: 6px; }
+        .btn-settle { background: #d97706; color: white; padding: 7px 14px; font-size: 13px; border-radius: 6px; }
+        .btn-edit { background: #10b981; color: white; padding: 5px 10px; font-size: 11px; border-radius: 4px; border: none; cursor: pointer; }
+        .btn-cancel-item { background: #f43f5e; color: white; border: none; padding: 3px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; }
+
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .summary-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; text-align: center; }
+        .summary-card .title { font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 5px; }
+        .summary-card .value { font-size: 18px; font-weight: bold; color: #1e293b; }
+        .summary-card .value.blue { color: #2563eb; }
+        .summary-card .value.red { color: #dc2626; }
+        .summary-card .value.amber { color: #d97706; }
+
+        .table-container { overflow-x: auto; }
+        table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: center; white-space: nowrap; }
+        table.data-table th { background: #f8fafc; color: #475569; padding: 11px 6px; border-bottom: 2px solid #e2e8f0; cursor: pointer; user-select: none; }
+        table.data-table th:hover { background: #e2e8f0; }
+        table.data-table th.prev-year-header { background: #fff7ed; color: #c2410c; cursor: default; }
+        table.data-table td { padding: 10px 6px; border-bottom: 1px solid #f1f5f9; color: #334155; vertical-align: middle; }
+
+        .detail-row { display: none; background-color: #f8fafc; }
+        .detail-row.active { display: table-row; }
+        .detail-box { padding: 15px; text-align: left; background: #eff6ff; border-radius: 6px; margin: 5px; }
+        .detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .detail-table { width: 100%; border-collapse: collapse; font-size: 12px; background: white; }
+        .detail-table th, .detail-table td { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: center; }
+
+        .badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        .badge-active { background-color: #dcfce7; color: #15803d; }
+        .badge-retired { background-color: #fee2e2; color: #b91c1c; }
+        .badge-education { background-color: #e0f2fe; color: #0284c7; }
+
+        .trash-badge {
+            display: inline-flex;
+            align-items: center;
+            background: #ede9fe;
+            color: #7c3aed;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 12px;
+            border: 1px solid #ddd6fe;
+            margin-top: 4px;
+        }
+
+        .text-bold { font-weight: bold; }
+        .text-blue { color: #2563eb; }
+        .text-red { color: #dc2626; }
+
+        .page { display: none; }
+        .page.active { display: block; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal-box { background: white; padding: 25px; border-radius: 8px; width: 360px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .modal-box.large { width: 850px; max-width: 95vw; text-align: left; }
+
+        #calendar { margin-top: 10px; background: #fff; padding: 20px; border-radius: 8px; min-height: 700px; }
+        .fc-event { cursor: pointer; font-size: 13px; padding: 3px 6px; border-radius: 4px; }
+
+        @media print {
+            @page {
+                size: A4 landscape;
+                margin: 6mm;
+            }
+            html, body {
+                width: 100% !important;
+                height: auto !important;
+                min-height: 0 !important;
+                overflow: visible !important;
+                background: #fff !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .container {
+                max-width: none !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .no-print, .top-bar, .nav-tabs-container {
+                display: none !important;
+            }
+            .page {
+                display: none !important;
+            }
+            .page.active {
+                display: block !important;
+                width: 100% !important;
+            }
+            #page-calendar.active {
+                height: 196mm !important;
+                overflow: hidden !important;
+                break-after: avoid !important;
+                page-break-after: avoid !important;
+            }
+            .card {
+                box-shadow: none !important;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                width: 100% !important;
+                overflow: visible !important;
+            }
+            .card h2 {
+                font-size: 14px !important;
+                margin: 0 0 4px 0 !important;
+            }
+            #calendar {
+                height: auto !important;
+                min-height: 0 !important;
+                max-width: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                overflow: visible !important;
+                border-radius: 0 !important;
+            }
+            .fc {
+                font-size: 10px !important;
+                width: 100% !important;
+            }
+            .fc table {
+                width: 100% !important;
+                table-layout: fixed !important;
+            }
+            .fc .fc-scroller {
+                overflow: visible !important;
+            }
+            .fc thead { display: table-header-group; }
+            .fc-toolbar { margin-bottom: 4px !important; }
+            .fc-toolbar-title { font-size: 15px !important; }
+            .fc-button-group, .fc-today-button { display: none !important; }
+            .fc-daygrid-day-frame { min-height: 0 !important; }
+            .fc-daygrid-day-number { padding: 1px 3px !important; font-size: 10px !important; }
+            .fc-event, .fc-daygrid-event {
+                font-size: 9px !important;
+                padding: 0 2px !important;
+                line-height: 1.2 !important;
+                margin-bottom: 1px !important;
+            }
+            .fc-daygrid-event, .fc-daygrid-day-frame, .fc-scrollgrid, tr {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+            }
+        }
+    
+
+        /* ===== 캘린더 인쇄 전용 표 (화면에서는 숨김) ===== */
+        #printCalendar { display: none; background: #fff; }
+        #printCalendar .pc-title { text-align: center; font-size: 15px; font-weight: 700; color: #1f2937; margin: 0 0 4px 0; }
+        #printCalendar .pc-table { width: calc(100% - 2px); table-layout: fixed; border-collapse: collapse; }
+        #printCalendar .pc-table th { font-size: 10px; font-weight: 700; color: #1f2937; padding: 3px 0; border: 1px solid #d1d5db; background: #fff; text-align: center; }
+        #printCalendar .pc-table td { border: 1px solid #d1d5db; vertical-align: top; padding: 1px 2px 2px 2px; height: 48px; overflow: hidden; }
+        #printCalendar .pc-table td.pc-other { background: #fff; }
+        #printCalendar .pc-table td.pc-other .pc-num { color: #c4c7cc; }
+        #printCalendar .pc-table td.pc-today { background: #fff8dc; }
+        #printCalendar .pc-num { text-align: right; font-size: 10px; line-height: 1.3; padding: 1px 2px; color: #374151; }
+        #printCalendar .pc-ev { display: block; color: #fff; border-radius: 3px; padding: 0 3px; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--pc-fs, 10px); line-height: 1.3; }
+        @media print {
+            body.cal-print-on #calendar { display: none !important; }
+            body.cal-print-on #printCalendar { display: block !important; width: 100% !important; }
+        }
+
+        .sort-btn { margin-left: 6px; padding: 2px 8px; font-size: 11px; font-weight: bold; color: #475569; background: #eef2f9; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; vertical-align: middle; }
+        .sort-btn:hover { background: #e0e7f3; }
+        @media print { .sort-btn { display: none !important; } }
+
+        .rpt-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(17,24,39,0.65); z-index: 2000; overflow: auto; padding: 16px; }
+        .rpt-overlay.active { display: block; }
+        .rpt-wrap { max-width: 210mm; margin: 0 auto; }
+        .rpt-bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; background: #fff; padding: 12px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); margin-bottom: 12px; }
+        .rpt-bar button { padding: 10px 22px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; color: #fff; cursor: pointer; }
+        .rpt-bar .rpt-save { background: #2563eb; }
+        .rpt-bar .rpt-save:hover { background: #1d4ed8; }
+        .rpt-bar .rpt-print { background: #059669; }
+        .rpt-bar .rpt-print:hover { background: #047857; }
+        .rpt-bar .rpt-back { background: #6b7280; }
+        .rpt-bar .rpt-back:hover { background: #4b5563; }
+
+        .rpt-sheet { background: #fff; color: #111827; width: 100%; min-height: 297mm; padding: 48px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #d1d5db; border-radius: 2px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); line-height: 1.6; text-align: left; }
+        .rpt-sheet, .rpt-sheet * { font-family: 'Noto Serif KR', 'Batang', '바탕', serif; }
+        .rpt-title { text-align: center; margin: 32px 0; font-size: 36px; font-weight: 700; letter-spacing: 0.1em; }
+        .rpt-title .rpt-type { display: inline-block; min-width: 84px; padding: 2px 10px; margin: 0 4px; font-size: 26px; font-weight: 400; letter-spacing: 0; background: #f9fafb; border: 1px solid #d1d5db; border-radius: 4px; }
+        .rpt-intro { margin-bottom: 32px; font-size: 20px; font-weight: 500; }
+        .rpt-intro .opt { color: #374151; font-weight: 400; }
+        .rpt-intro .opt.on { color: #000; font-weight: 700; text-decoration: underline; }
+        .rpt-fields { display: flex; flex-direction: column; gap: 32px; font-size: 20px; }
+        .rpt-row { display: flex; align-items: center; flex-wrap: wrap; }
+        .rpt-row.top { align-items: flex-start; flex-wrap: nowrap; }
+        .rpt-label { width: 128px; flex-shrink: 0; font-weight: 700; }
+        .rpt-sheet input[type=text], .rpt-sheet input[type=number], .rpt-sheet input[type=date] { border: none; border-bottom: 1px dotted #9ca3af; border-radius: 0; padding: 4px 8px; background: transparent; font-size: 18px; color: #111827; outline: none; }
+        .rpt-sheet input[type=text]:focus { border-bottom: 1px solid #000; }
+        .rpt-sheet input.rpt-ro { pointer-events: none; }
+        .rpt-sheet input[type=radio] { width: 16px; height: 16px; padding: 0; border: none; pointer-events: none; }
+        .rpt-sheet textarea { flex: 1; width: 100%; border: 1px solid #d1d5db; border-radius: 4px; padding: 12px; font-size: 18px; line-height: 1.6; background: transparent; resize: none; outline: none; color: #111827; pointer-events: none; }
+        .rpt-half { margin-left: 24px; display: flex; align-items: center; gap: 12px; font-size: 17px; color: #4b5563; background: #f9fafb; padding: 8px; border: 1px solid #e5e7eb; border-radius: 4px; }
+        .rpt-half label { display: inline-flex; align-items: center; gap: 6px; font-size: 17px; font-weight: normal; color: #4b5563; }
+        .rpt-sign { display: flex; flex-direction: column; align-items: flex-end; margin: 24px 0 32px; font-size: 20px; }
+        .rpt-sign .line { display: flex; align-items: center; gap: 12px; }
+        .rpt-sign .gap { height: 48px; }
+        .rpt-foot { display: flex; justify-content: space-between; font-size: 12px; border-top: 1px solid #d1d5db; padding-top: 8px; color: transparent; user-select: none; }
+
+        @page rptpage { size: A4 portrait; margin: 0; }
+        @media print {
+            body.rpt-printing { padding: 0 !important; background: #fff !important; }
+            body.rpt-printing > *:not(#reportModal) { display: none !important; }
+            body.rpt-printing #reportModal { position: static !important; display: block !important; background: none !important; padding: 0 !important; overflow: visible !important; }
+            body.rpt-printing .rpt-bar { display: none !important; }
+            body.rpt-printing .rpt-wrap { max-width: none !important; }
+            body.rpt-printing .rpt-sheet { page: rptpage; width: 210mm !important; height: 290mm !important; min-height: 0 !important; padding: 10mm 15mm !important; border: none !important; box-shadow: none !important; }
+            body.rpt-printing .rpt-title .rpt-type { background: none !important; border: none !important; }
+            body.rpt-printing .rpt-half { background: none !important; }
+            body.rpt-printing .rpt-sheet input { border: none !important; border-bottom: none !important; }
+            body.rpt-printing .rpt-foot { border-top: none !important; }
+            body.rpt-printing #rptLeader { color: transparent !important; -webkit-text-fill-color: transparent !important; }
+            body.rpt-printing #rptLeader::placeholder { color: transparent !important; -webkit-text-fill-color: transparent !important; }
+        }
+
+        /* ===== 시스템 접속 로그인 화면 ===== */
+        body.auth-locked { overflow: hidden !important; height: 100vh; }
+        body.auth-locked .container { visibility: hidden; }
+        #loginGate { position: fixed; inset: 0; z-index: 99999; background: #0f172a; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        #loginGate .lg-card { background: #fff; width: 100%; max-width: 350px; border-radius: 18px; padding: 34px 40px 36px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.35); }
+        #loginGate h2 { font-size: 20px; font-weight: 800; color: #0f172a; margin: 0 0 10px; }
+        #loginGate .lg-sub { font-size: 13px; color: #64748b; margin: 0 0 22px; }
+        #loginGate input { width: 100%; height: 46px; border: 1px solid #cbd5e1; border-radius: 8px; text-align: center; font-size: 16px; letter-spacing: 3px; outline: none; margin-bottom: 14px; }
+        #loginGate input::placeholder { letter-spacing: 3px; color: #94a3b8; }
+        #loginGate input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.18); }
+        #loginGate button { width: 100%; height: 44px; border: none; border-radius: 8px; background: #3b82f6; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; }
+        #loginGate button:hover { background: #2563eb; }
+        #loginGate button:disabled { background: #93c5fd; cursor: default; }
+        #loginGate .lg-msg { min-height: 18px; margin-top: 12px; font-size: 12.5px; color: #dc2626; line-height: 1.5; }
+        @media print { #loginGate { display: none !important; } }
+    </style>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="auth-locked">
+
+<div id="loginGate">
+    <div class="lg-card">
+        <h2>🔒 연차 관리 시스템 접속</h2>
+        <p class="lg-sub">시스템 접근을 위해 비밀번호를 입력하세요.</p>
+        <input type="password" id="gatePw" placeholder="비밀번호 입력" autocomplete="off">
+        <button type="button" id="gateBtn">접속하기</button>
+        <div class="lg-msg" id="gateMsg"></div>
+    </div>
+</div>
+
+<script>
+(function () {
+    // Google Firebase Realtime Database 의 'system password' / 'is_locked' 값으로 접속 확인
+    const RTDB_URL = 'https://risk-system-24d05-default-rtdb.firebaseio.com/';
+    const FALLBACK_PASSWORD = '7777';      // 서버에 연결할 수 없을 때만 사용하는 기본 비밀번호
+    const ALLOW_FALLBACK = true;           // false 로 바꾸면 서버 연결이 안 될 때 접속을 막음
+    const SESSION_KEY = 'leave_system_gate_ok';
+
+    const gate = document.getElementById('loginGate');
+    const pw = document.getElementById('gatePw');
+    const btn = document.getElementById('gateBtn');
+    const msg = document.getElementById('gateMsg');
+
+    function unlock() {
+        try { sessionStorage.setItem(SESSION_KEY, '1'); } catch (e) {}
+        document.body.classList.remove('auth-locked');
+        gate.style.display = 'none';
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+            if (typeof calendarInstance !== 'undefined' && calendarInstance) calendarInstance.updateSize();
+        }, 50);
+    }
+
+    try { if (sessionStorage.getItem(SESSION_KEY) === '1') { unlock(); return; } } catch (e) {}
+
+    async function fetchSettings() {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 7000);
+        try {
+            const res = await fetch(RTDB_URL + '.json?_=' + Date.now(), { signal: ctrl.signal, cache: 'no-store' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (!data || typeof data !== 'object') throw new Error('empty');
+            return data;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    async function submit() {
+        const input = pw.value.trim();
+        if (!input) { msg.textContent = '비밀번호를 입력하세요.'; pw.focus(); return; }
+        btn.disabled = true;
+        btn.textContent = '확인 중...';
+        msg.textContent = '';
+        try {
+            let settings = null;
+            try {
+                settings = await fetchSettings();
+            } catch (e) {
+                console.warn('[접속] 서버 확인 실패:', e);
+            }
+
+            if (settings) {
+                if (settings.is_locked === true || String(settings.is_locked).toLowerCase() === 'true') {
+                    msg.textContent = '시스템이 잠겨 있습니다. 관리자에게 문의하세요.';
+                    return;
+                }
+                if (input === String(settings['system password'] == null ? '' : settings['system password']).trim()) { unlock(); return; }
+                msg.textContent = '비밀번호가 일치하지 않습니다.';
+            } else if (ALLOW_FALLBACK) {
+                if (input === FALLBACK_PASSWORD) { unlock(); return; }
+                msg.textContent = '서버에 연결하지 못해 기본 비밀번호로 확인했습니다. 비밀번호가 일치하지 않습니다.';
+            } else {
+                msg.textContent = '서버에 연결할 수 없습니다. 인터넷 연결을 확인한 뒤 다시 시도하세요.';
+            }
+            pw.value = '';
+            pw.focus();
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '접속하기';
+        }
+    }
+
+    btn.addEventListener('click', submit);
+    pw.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+    setTimeout(() => pw.focus(), 50);
+})();
+</script>
+
+
+<div class="container">
+
+    <div class="top-bar no-print">
+        <div class="team-select-box">
+            <span>👤 접속 팀:</span>
+            <select id="accessTeamSelect" onchange="handleTeamChange()">
+                <option value="소방팀" selected>소방팀</option>
+                <option value="전체 (총괄 관리자)">전체 (총괄 관리자)</option>
+                <option value="관리">관리</option>
+                <option value="전기팀">전기팀</option>
+                <option value="설비팀">설비팀</option>
+                <option value="건축팀">건축팀</option>
+                <option value="점검팀">점검팀</option>
+                <option value="냉동">냉동</option>
+                <option value="운송">운송</option>
+                <option value="미화팀">미화팀</option>
+                <option value="입주사미화">입주사미화</option>
+            </select>
+        </div>
+
+        <button class="action-btn blue" onclick="saveData()">💾 데이터 저장</button>
+        <span id="firestoreStatus" style="font-size:11px;color:#64748b;align-self:center;">☁️ Firestore 미설정</span>
+        <button class="action-btn yellow" onclick="exportBackup()">📁 백업 (다운로드)</button>
+        <button class="action-btn purple" onclick="restoreBackup()">💾 백업 복원 / 이력 조회</button>
+        <button class="action-btn" onclick="window.print()">🖨 인쇄 (Print)</button>
+        <button class="action-btn red" onclick="savePdf()">📄 PDF 저장</button>
+    </div>
+
+    <div class="nav-tabs-container no-print">
+        <div class="nav-tabs">
+            <button class="tab-btn active" id="tab1" onclick="switchTab('apply')">📝 연차 신청하기</button>
+            <button class="tab-btn" id="tab2" onclick="switchTab('personal')">👤 개인 사용현황</button>
+            <button class="tab-btn admin-tab" id="tab3" onclick="requestAdminAccess('dashboard')">🔒 전체 대시보드 (관리자용)</button>
+            <button class="tab-btn calendar-tab" id="tab4" onclick="switchTab('calendar')">📅 연차 캘린더 (전체 현황)</button>
+        </div>
+
+        <div class="admin-year-container" id="adminYearContainer">
+            <div class="team-select-box">
+                <span>📅 적용 기준일:</span>
+                <input type="date" id="systemYearSelect" value="2026-12-31" min="2024-01-01" max="2035-12-31" onchange="handleYearChange()">
+            </div>
+        </div>
+    </div>
+
+    <div id="page-apply" class="page active">
+        <div class="card">
+            <h1>연차 휴가 신청서 작성</h1>
+            <form id="leaveApplyForm" onsubmit="handleApplySubmit(event)">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>신청 사원 선택</label>
+                        <select id="applyEmpSelect" onchange="triggerEmpBirthModal('apply')" required>
+                            <option value="">-- 사원 선택 --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>부서/팀</label>
+                        <input type="text" id="applyDept" readonly style="background:#f8fafc;">
+                    </div>
+                    <div class="form-group">
+                        <label>직급</label>
+                        <input type="text" id="applyPosition" readonly style="background:#f8fafc;">
+                    </div>
+                    <div class="form-group">
+                        <label>휴가 구분</label>
+                        <select id="applyType" onchange="calculateApplyDays()">
+                            <option value="연차">연차 (1일)</option>
+                            <option value="오전반차">오전 반차 (0.5일)</option>
+                            <option value="오후반차">오후 반차 (0.5일)</option>
+                            <option value="대체휴가">대체휴가 (차감제외)</option>
+                            <option value="대체반차">대체 반차 (0.5일/차감제외)</option>
+                            <option value="경조휴가">경조휴가 (차감제외)</option>
+                            <option value="교육">교육 (1일/차감제외)</option>
+                            <option value="교육오전반차">교육 오전반차 (0.5일/차감제외)</option>
+                            <option value="교육오후반차">교육 오후반차 (0.5일/차감제외)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>시작일</label>
+                        <input type="date" id="applyStart" onchange="calculateApplyDays()" required>
+                    </div>
+                    <div class="form-group">
+                        <label>종료일</label>
+                        <input type="date" id="applyEnd" onchange="calculateApplyDays()" required>
+                    </div>
+                    <div class="form-group">
+                        <label>사용 일수</label>
+                        <input type="number" id="applyDays" step="0.5" readonly style="background:#f8fafc; font-weight:bold; color:#2563eb;">
+                    </div>
+                    <div class="form-group full">
+                        <label>사유</label>
+                        <textarea id="applyReason" rows="3" placeholder="휴가 사유를 작성하세요." required></textarea>
+                    </div>
+                </div>
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary">신청서 작성 완료</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="page-personal" class="page">
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>👤 개인 연차 사용 현황</h2>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="margin:0;">사원 선택:</label>
+                    <select id="personalEmpSelect" onchange="triggerEmpBirthModal('personal')" style="width: 200px;">
+                        <option value="">-- 사원 선택 --</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="title">고지/발생 연차</div>
+                    <div class="value" id="p-generated">-</div>
+                    <div id="p-generated-sub" style="font-size: 11px; color: #64748b; margin-top: 4px; font-weight: normal;">-</div>
+                </div>
+                <div class="summary-card" style="background:#fff7ed; border-color:#ffedd5;">
+                    <div class="title" style="color:#c2410c;">이전년도 사용</div>
+                    <div class="value amber" id="p-prevUsed">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="title">사용 연차</div>
+                    <div class="value red" id="p-usedAnnual">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="title">사용 반차</div>
+                    <div class="value red" id="p-usedHalf">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="title">대체 휴가</div>
+                    <div class="value" id="p-substitute">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="title">경조 휴가</div>
+                    <div class="value" id="p-congrat">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="title">교육</div>
+                    <div class="value" id="p-education" style="color: #0284c7;">-</div>
+                </div>
+                <div class="summary-card" style="background:#eff6ff; border-color:#bfdbfe;">
+                    <div class="title" style="color:#1d4ed8;">잔여/정산 연차</div>
+                    <div class="value blue" id="p-remaining">-</div>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                <h3 style="font-size: 15px; color: #334155; margin: 0;">📋 상세 사용 내역 및 일자 (<span id="personalYearText">2026년</span>)</h3>
+                <button class="action-btn purple" id="personalTrashBtn" style="display:none;" onclick="openTrashModal(authenticatedPersonalEmp ? authenticatedPersonalEmp.id : null, true)">🗑️ 취소된 휴가 보관함 (<span id="personalTrashCount">0</span>)</button>
+            </div>
+            
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>번호</th>
+                            <th>구분<button type="button" class="sort-btn" id="psortTypeBtn" onclick="sortPersonalHistory('type')">정렬↕</button></th>
+                            <th>사용 기간<button type="button" class="sort-btn" id="psortPeriodBtn" onclick="sortPersonalHistory('period')">정렬↕</button></th>
+                            <th>사용 일수</th>
+                            <th>사유</th>
+                        </tr>
+                    </thead>
+                    <tbody id="personalHistoryBody">
+                        <tr><td colspan="5" style="color:#94a3b8;">사원을 선택해 주세요.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="page-dashboard" class="page">
+        <div class="card" style="background: #f8fafc; border: 1px solid #cbd5e1;">
+            <h2>📊 전체 사원 현황 통계 (<span id="statYearText">2026년</span>)</h2>
+            <div class="summary-grid" style="margin-bottom: 0;">
+                <div class="summary-card">
+                    <div class="title">총 직원 수</div>
+                    <div class="value" id="statTotalEmp">0명</div>
+                </div>
+                <div class="summary-card">
+                    <div class="title">재직 / 퇴사</div>
+                    <div class="value" id="statActiveRetired" style="font-size: 16px;">0 / 0</div>
+                </div>
+                <div class="summary-card">
+                    <div class="title">총 고지연차</div>
+                    <div class="value blue" id="statTotalGenerated">0개</div>
+                </div>
+                <div class="summary-card">
+                    <div class="title">총 사용연차</div>
+                    <div class="value red" id="statTotalUsed">0개</div>
+                </div>
+                <div class="summary-card">
+                    <div class="title">총 잔여연차</div>
+                    <div class="value blue" id="statTotalRemaining">0개</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🔒 총괄 관리자 - 신규 사원 등록 및 기준 설정</h2>
+            <form id="addEmpForm" class="form-grid" onsubmit="handleAddEmp(event)">
+                <div class="form-group">
+                    <label>번호 (비어 있는 번호 자동 입력)</label>
+                    <input type="number" id="newNo" min="1" step="1" oninput="this.dataset.dirty='1'" required>
+                </div>
+                <div class="form-group">
+                    <label>부서/팀</label>
+                    <select id="newDept" required>
+                        <option value="관리">관리</option>
+                        <option value="소방팀">소방팀</option>
+                        <option value="전기팀">전기팀</option>
+                        <option value="설비팀">설비팀</option>
+                        <option value="건축팀">건축팀</option>
+                        <option value="점검팀">점검팀</option>
+                        <option value="냉동">냉동</option>
+                        <option value="운송">운송</option>
+                        <option value="미화팀">미화팀</option>
+                        <option value="입주사미화">입주사미화</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>이름</label>
+                    <input type="text" id="newName" placeholder="예: 박영희" required>
+                </div>
+                <div class="form-group">
+                    <label>직급</label>
+                    <input type="text" id="newPosition" placeholder="예: 과장" required>
+                </div>
+                <div class="form-group">
+                    <label>생년월일 (6자리)</label>
+                    <input type="password" id="newBirth" maxlength="6" placeholder="예: 850815" required>
+                </div>
+                <div class="form-group">
+                    <label>입사일</label>
+                    <input type="date" id="newJoinDate" required>
+                </div>
+                <div class="btn-group full" style="margin-top:0;">
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">+ 사원 등록</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card">
+            <details class="fold-box">
+                <summary><h2>📥 엑셀 일괄 등록 (직원 명부 / 연차 사용내역)</h2></summary>
+                <div class="fold-body">
+                    <p style="font-size:13px; color:#64748b; margin-bottom:8px; line-height:1.6;">
+                        <b style="color:#334155;">[직원 명부]</b> 첫 줄에 제목(번호, 부서/팀, 이름, 직급, 주민번호 또는 생년월일, 입사일, 퇴사일, 구분, 이전년도 사용)을 두고 둘째 줄부터 직원 정보를 입력한 .xlsx 또는 .csv 파일을 올려 주세요.<br>
+                        주민번호를 올리면 앞 7자리(생년월일 + 성별 구분)만 읽어 저장하고 뒷자리는 저장하지 않습니다. 번호·퇴사일·구분·이전년도 사용은 비워도 됩니다. 구분을 비우면 입사연도 기준으로 자동 분류됩니다. 이름과 생년월일이 같은 직원은 정보를 갱신합니다.
+                    </p>
+                    <p style="font-size:13px; color:#64748b; margin-bottom:12px; line-height:1.6;">
+                        <b style="color:#334155;">[연차·반차 사용내역]</b> 양식을 내려받아 <b>왼쪽에는 이름 + 연차 날짜, 오른쪽에는 이름 + 반차 날짜</b>를 입력해 올려 주세요. 날짜는 한 칸에 하루씩(예: 2026-03-10 또는 3월 10일) 적습니다.<br>
+                        직원별로 자동 정리되어 각 직원의 사용내역에 추가됩니다. 이름은 공백·대소문자가 달라도 인식하고, 시스템에 없는 이름은 제외하고 안내합니다. 반차는 기본 오전반차로 등록되며 날짜 뒤에 "오후"를 적으면 오후반차입니다. 이미 같은 날짜에 사용내역이 있으면 중복으로 건너뜁니다.
+                    </p>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <button type="button" class="btn btn-secondary" onclick="downloadUploadTemplate()">📄 양식 다운로드</button>
+                        <button type="button" class="btn btn-primary" style="background:#10b981;" onclick="document.getElementById('rosterFileInput').click()">📥 엑셀 업로드</button>
+                        <input type="file" id="rosterFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleRosterFile(this)">
+                        <button type="button" class="btn btn-secondary" onclick="downloadUsageTemplate()">📄 사용내역 양식 다운로드</button>
+                        <button type="button" class="btn btn-primary" style="background:#10b981;" onclick="document.getElementById('usageFileInput').click()">📥 사용내역 업로드</button>
+                        <input type="file" id="usageFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleUsageFile(this)">
+                    </div>
+                </div>
+            </details>
+        </div>
+
+        <div class="card table-container">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:15px;">
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <h2 style="margin:0;">전체 사원 연차 및 퇴사 정산 현황 (<span id="dashboardYearText">2026년</span> 적용)<span id="dashboardTeamLabel"></span></h2>
+                    <div class="team-select-box no-print">
+                        <span>👥 팀 보기:</span>
+                        <select id="dashboardTeamFilter" onchange="handleDashboardTeamFilter()">
+                            <option value="">전체보기</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" class="action-btn purple" onclick="openGlobalTrashModal()">🗑 취소된 휴가 보관함 (<span id="globalTrashCount">0</span>)</button>
+                    <button type="button" class="btn btn-secondary" onclick="openEmpTrashModal()">🗑 직원 삭제함 (<span id="empTrashCount">0</span>)</button>
+                </div>
+            </div>
+            <table class="data-table dashboard-table">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('displayNo')">번호 ↕</th>
+                        <th onclick="sortTable('dept')">부서/팀 ↕</th>
+                        <th onclick="sortTable('name')">이름 ↕</th>
+                        <th onclick="sortTable('position')">직급 ↕</th>
+                        <th onclick="sortTable('joinDate')">입사일 ↕</th>
+                        <th onclick="sortTable('category')">구분 / 근속 ↕</th>
+                        <th onclick="sortTable('isRetired')">상태 ↕</th>
+                        <th style="background:#fef2f2; color:#b91c1c;">퇴사일</th>
+                        <th>고지연차</th>
+                        <th class="settlement-col">정산 연차</th>
+                        <th class="prev-year-header">이전년도 사용</th>
+                        <th class="annual-usage-col">사용연차</th>
+                        <th class="half-usage-col">사용반차</th>
+                        <th class="substitute-usage-col">대체휴가(차감제외)</th>
+                        <th class="congrat-usage-col">축휴(경조)</th>
+                        <th class="edu-usage-col">교육</th>
+                        <th>차감합계</th>
+                        <th>남은연차</th>
+                        <th>상세/정산</th>
+                        <th>관리</th>
+                    </tr>
+                </thead>
+                <tbody id="dashboardTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="page-calendar" class="page">
+        <div class="card">
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+                <h2 style="margin:0;">📅 전직원 연차 캘린더 (전체 일정 현황)<span id="calendarTeamLabel"></span></h2>
+                <div class="team-select-box no-print">
+                    <span>👥 팀 보기:</span>
+                    <select id="calendarTeamFilter" onchange="handleCalendarTeamFilter()">
+                        <option value="">전체보기</option>
+                    </select>
+                </div>
+            </div>
+            <p style="font-size:13px; color:#64748b; margin-bottom:12px;" class="no-print">전직원이 신청 및 사용 중인 연차 일정을 달력 형태로 한눈에 확인할 수 있습니다. 일정을 클릭하면 상세 정보를 볼 수 있습니다.</p>
+            <div id="calendar"></div>
+            <div id="printCalendar"></div>
+        </div>
+    </div>
+
+</div>
+
+<div class="modal-overlay" id="trashModal">
+    <div class="modal-box large">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:2px solid #e2e8f0; padding-bottom:10px;">
+            <h3 style="color:#1e293b; display:flex; align-items:center; gap:8px;">
+                📋 <span id="trashModalTitle">취소된 휴가 목록 보관함</span>
+            </h3>
+            <button class="btn btn-secondary" onclick="closeTrashModal()" style="padding:4px 10px;">✕ 닫기</button>
+        </div>
+        
+        <p style="font-size:13px; color:#64748b; margin-bottom:15px;" id="trashModalSubText">처리할 휴가 항목을 선택한 후 버튼을 누르세요.</p>
+        
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;" id="trashModalActionBtns">
+            <button class="btn btn-primary" style="background:#10b981;" onclick="restoreSelectedHistory()">↺ 선택 항목 복원</button>
+            <button class="btn btn-danger" onclick="permanentlyDeleteSelectedHistory()">🗑 선택 항목 영구 삭제</button>
+        </div>
+
+        <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;"><input type="checkbox" id="selectAllTrash" onchange="toggleSelectAllTrash(this)"></th>
+                        <th>취소/삭제 일시</th>
+                        <th>직원명</th>
+                        <th>구분</th>
+                        <th>사용 기간</th>
+                        <th>사용 일수</th>
+                        <th>사유</th>
+                    </tr>
+                </thead>
+                <tbody id="trashTableBody">
+                    <tr><td colspan="7" style="color:#94a3b8; padding: 20px;">보관된 내역이 없습니다.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="empTrashModal">
+    <div class="modal-box large">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:2px solid #e2e8f0; padding-bottom:10px;">
+            <h3 style="color:#1e293b; display:flex; align-items:center; gap:8px;">🗑 직원 삭제함 (복원 / 영구 삭제)</h3>
+            <button class="btn btn-secondary" onclick="closeEmpTrashModal()" style="padding:4px 10px;">✕ 닫기</button>
+        </div>
+
+        <p style="font-size:13px; color:#64748b; margin-bottom:15px;">삭제한 직원이 보관됩니다. 처리할 직원을 선택한 후 버튼을 누르세요. 영구 삭제하면 연차 사용 내역도 함께 사라집니다.</p>
+
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;">
+            <button class="btn btn-primary" style="background:#10b981;" onclick="restoreSelectedEmployees()">↺ 선택 직원 복원</button>
+            <button class="btn btn-danger" onclick="permanentlyDeleteSelectedEmployees()">🗑 선택 영구 삭제</button>
+        </div>
+
+        <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;"><input type="checkbox" id="selectAllEmpTrash" onchange="toggleSelectAllEmpTrash(this)"></th>
+                        <th>삭제 일시</th>
+                        <th>부서/팀</th>
+                        <th>이름</th>
+                        <th>직급</th>
+                        <th>입사일</th>
+                        <th>퇴사일</th>
+                        <th>상태</th>
+                    </tr>
+                </thead>
+                <tbody id="empTrashTableBody">
+                    <tr><td colspan="8" style="color:#94a3b8; padding: 25px;">삭제함이 비어 있습니다.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="birthAuthModal">
+    <div class="modal-box">
+        <h3 style="margin-bottom:8px; color:#1e293b;">🔒 본인 인증 (생년월일)</h3>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 15px;" id="authModalSubtext">선택한 사원의 생년월일 6자리를 입력하세요.</p>
+        <input type="password" id="empBirthInput" maxlength="6" placeholder="생년월일 6자리 (예: 850815)" style="width:100%; margin-bottom:15px; text-align:center; font-size:16px; letter-spacing:3px;" onkeyup="if(event.key==='Enter') verifyEmpBirth()">
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button class="btn btn-secondary" onclick="cancelEmpAuth()">취소</button>
+            <button class="btn btn-primary" onclick="verifyEmpBirth()">확인</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="adminModal">
+    <div class="modal-box">
+        <h3 style="margin-bottom:10px;">🔒 총괄 관리자 인증</h3>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 15px;">비밀번호를 입력해주세요.</p>
+        <input type="password" id="adminPassword" placeholder="비밀번호 입력" style="width:100%; margin-bottom:15px; text-align:center;" onkeyup="if(event.key==='Enter') checkAdminPassword()">
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button class="btn btn-secondary" onclick="closeAdminModal()">취소</button>
+            <button class="btn btn-primary" onclick="checkAdminPassword()">확인</button>
+        </div>
+    </div>
+</div>
+
+<div class="rpt-overlay" id="reportModal">
+    <div class="rpt-wrap">
+        <div class="rpt-bar">
+            <button type="button" class="rpt-save" onclick="confirmReportSave()">✅ 최종 저장</button>
+            <button type="button" class="rpt-print" onclick="printReport()">🖨 인쇄하기</button>
+            <button type="button" class="rpt-back" onclick="closeReportModal()">← 수정하기</button>
+        </div>
+        <div class="rpt-sheet">
+            <div>
+                <div class="rpt-title">(<span class="rpt-type" id="rptType">연차</span>) 사용 보고</div>
+                <div class="rpt-intro">-아래와 같이 ( <span class="opt" data-val="연차">연차</span> . <span class="opt" data-val="반차">반차</span> . <span class="opt" data-val="교육">교육</span> . <span class="opt" data-val="대체">대체</span> . <span class="opt" data-val="조휴">조휴</span> . <span class="opt" data-val="축휴">축휴</span> ) 를 사용하고자 하니 재가 바랍니다.</div>
+                <div class="rpt-fields">
+                    <div class="rpt-row">
+                        <span class="rpt-label">1. 팀 명 :</span>
+                        <input type="text" id="rptTeam" class="rpt-ro" readonly style="flex:1;">
+                    </div>
+                    <div class="rpt-row">
+                        <span class="rpt-label">2. 성 명 :</span>
+                        <input type="text" id="rptName" class="rpt-ro" readonly style="width:224px;">
+                        <span style="margin-left:16px; color:#374151;">(인)</span>
+                    </div>
+                    <div class="rpt-row">
+                        <span class="rpt-label">3. 기 간 :</span>
+                        <input type="number" id="rptDays" class="rpt-ro" readonly style="width:80px; text-align:center;">
+                        <span style="margin-left:8px;">일간</span>
+                        <div class="rpt-half">
+                            <span style="font-weight:600; color:#374151;">※반차시간:</span>
+                            <label><input type="radio" name="rptHalf" id="rptHalfAm" value="오전"> 오전</label>
+                            <label><input type="radio" name="rptHalf" id="rptHalfPm" value="오후"> 오후</label>
+                        </div>
+                    </div>
+                    <div class="rpt-row">
+                        <span class="rpt-label">4. 일 자 :</span>
+                        <input type="date" id="rptStart" class="rpt-ro" readonly>
+                        <span style="margin: 0 8px;">~</span>
+                        <input type="date" id="rptEnd" class="rpt-ro" readonly>
+                    </div>
+                    <div class="rpt-row top">
+                        <span class="rpt-label">5. 사 유 :</span>
+                        <textarea id="rptReason" rows="3" readonly></textarea>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <div class="rpt-sign">
+                    <div class="line">
+                        <span style="font-weight:700;">팀장 :</span>
+                        <input type="text" id="rptLeader" placeholder="팀장 이름" style="width:128px; text-align:center;">
+                        <span style="color:#374151;">(인)</span>
+                    </div>
+                    <div class="gap"></div>
+                    <div class="line">
+                        <span style="font-weight:700;">소장 :</span>
+                        <input type="text" id="rptDirector" class="rpt-ro" readonly value="김 정 수" style="width:128px; text-align:center; font-weight:700;">
+                        <span style="color:#374151;">(인)</span>
+                    </div>
+                </div>
+                <div class="rpt-foot"><span>군미26</span><span>아텍산업개발(주)</span><span>210mm X 290mm</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let SYSTEM_BASE_YEAR = 2026;
+    
+    let employees = [
+        {
+            id: 1,
+            dept: "전기팀",
+            name: "이욱호",
+            position: "차장",
+            birth: "640101",
+            joinDate: "2015-01-02",
+            retireDate: "",
+            prevYearUsed: 0,
+            history: [
+                { id: 101, type: "연차", start: "2026-03-10", end: "2026-03-10", days: 1, reason: "개인 사유" },
+                { id: 102, type: "교육", start: "2026-05-15", end: "2026-05-16", days: 2, reason: "사내 직무 교육" },
+                { id: 103, type: "오전반차", start: "2026-07-01", end: "2026-07-01", days: 0.5, reason: "병원 진료" }
+            ],
+            trashHistory: []
+        },
+        {
+            id: 2,
+            dept: "전기팀",
+            name: "김철수",
+            position: "기사",
+            birth: "900505",
+            joinDate: "2026-05-01", 
+            retireDate: "2026-09-01", 
+            prevYearUsed: 10,
+            history: [
+                { id: 201, type: "연차", start: "2026-06-01", end: "2026-06-04", days: 4, reason: "개인 연차 소진" }
+            ],
+            trashHistory: []
+        },
+        {
+            id: 3,
+            dept: "소방팀",
+            name: "박영희",
+            position: "과장",
+            birth: "850815",
+            joinDate: "2026-05-01",
+            retireDate: "",
+            prevYearUsed: 0,
+            history: [
+                { id: 301, type: "연차", start: "2026-08-01", end: "2026-08-04", days: 4, reason: "휴가 사용" }
+            ],
+            trashHistory: []
+        }
+    ];
+
+    let currentAuthMode = ''; 
+    let currentAuthTargetEmpId = null;
+    let authenticatedApplyEmp = null;
+    let authenticatedPersonalEmp = null;
+    let isAdminAuthenticated = false;
+    let targetTabAfterAuth = 'dashboard';
+    let previousTeam = null;
+    let currentTrashEmpId = null;
+    let isTrashModalRestricted = false;
+    let editingEmpId = null;
+    let calendarInstance = null;
+
+    let sortColumn = null;
+    let sortDirection = 'asc';
+
+    const DEPARTMENT_LIST = ["관리", "소방팀", "전기팀", "설비팀", "건축팀", "점검팀", "냉동", "운송", "미화팀", "입주사미화"];
+
+    // ==========================================================
+    // 번호 자동 정렬 / 중복 방지 핵심 함수
+    // ==========================================================
+    function normalizeEmployeeNo(value) {
+        const num = Number(value);
+        if (!Number.isInteger(num) || num < 1) return null;
+        return num;
+    }
+
+    function setEmployeeNoWithAutoShift(empId, targetNo) {
+        const emp = employees.find(e => e.id === empId);
+        if (!emp) return false;
+
+        const newNo = normalizeEmployeeNo(targetNo);
+        if (newNo === null) return false;
+
+        const ordered = [...employees].sort((a, b) => Number(a.no) - Number(b.no));
+        ordered.splice(ordered.indexOf(emp), 1);
+        ordered.splice(Math.min(newNo - 1, ordered.length), 0, emp);
+        ordered.forEach((employee, index) => {
+            employee.no = index + 1;
+        });
+        return true;
+    }
+
+    function ensureUniqueEmployeeNo(targetNo, excludeId = null) {
+        const num = normalizeEmployeeNo(targetNo);
+        if (num === null) return null;
+
+        const taken = employees
+            .filter(e => e.id !== excludeId)
+            .map(e => Number(e.no))
+            .filter(n => Number.isInteger(n));
+
+        if (!taken.includes(num)) return num;
+
+        let candidate = 1;
+        while (taken.includes(candidate)) candidate++;
+        return candidate;
+    }
+
+    function lowestFreeNo(excludeId) {
+        const used = new Set(employees.filter(e => e.id !== excludeId && Number.isInteger(e.no)).map(e => e.no));
+        let n = 1;
+        while (used.has(n)) n++;
+        return n;
+    }
+
+    function ensureEmployeeNumbers() {
+        const seen = new Set();
+        employees.forEach(e => {
+            if (Number.isInteger(e.no) && e.no > 0 && !seen.has(e.no)) seen.add(e.no);
+            else e.no = null;
+        });
+        employees.forEach(e => {
+            if (!e.no) {
+                let n = 1;
+                while (seen.has(n)) n++;
+                e.no = n;
+                seen.add(n);
+            }
+        });
+    }
+
+    function shiftNumbersFrom(startNo, excludeId) {
+        const run = [];
+        let cur = startNo;
+        while (true) {
+            const holder = employees.find(e => e.id !== excludeId && e.no === cur);
+            if (!holder) break;
+            run.push(holder);
+            cur++;
+        }
+        run.forEach(h => { h.no += 1; });
+    }
+
+    function refreshNewEmpNo() {
+        const el = document.getElementById('newNo');
+        if (el && !el.dataset.dirty) el.value = lowestFreeNo();
+    }
+
+    function formatBaseDate(v) {
+        const [y, m, d] = v.split('-');
+        return `${y}년 ${parseInt(m)}월 ${parseInt(d)}일`;
+    }
+
+    function handleYearChange() {
+        const dateInput = document.getElementById('systemYearSelect');
+        if (!dateInput.value) {
+            dateInput.value = SYSTEM_BASE_YEAR + '-12-31';
+        }
+        SYSTEM_BASE_YEAR = parseInt(dateInput.value.split('-')[0]);
+        const label = formatBaseDate(dateInput.value);
+        document.getElementById('dashboardYearText').innerText = label;
+        document.getElementById('personalYearText').innerText = label;
+        document.getElementById('statYearText').innerText = SYSTEM_BASE_YEAR + '년';
+        renderDashboard();
+        if (authenticatedPersonalEmp) {
+            renderPersonalView(authenticatedPersonalEmp);
+        }
+    }
+
+    function isSuperAdminMode() {
+        return document.getElementById('accessTeamSelect').value === "전체 (총괄 관리자)";
+    }
+
+    function handleTeamChange() {
+        const selectedTeam = document.getElementById('accessTeamSelect').value;
+        isAdminAuthenticated = false;
+
+        const activePage = document.querySelector('.page.active');
+        if (activePage && activePage.id === 'page-dashboard') {
+            switchTab('apply');
+        }
+
+        populateEmpSelectOptions(selectedTeam);
+        resetApplyForm();
+        resetPersonalView();
+    }
+
+    function triggerEmpBirthModal(mode) {
+        currentAuthMode = mode;
+        const selectId = mode === 'apply' ? 'applyEmpSelect' : 'personalEmpSelect';
+        const empId = parseInt(document.getElementById(selectId).value);
+
+        if (!empId) {
+            if (mode === 'apply') resetApplyForm();
+            if (mode === 'personal') resetPersonalView();
+            return;
+        }
+
+        const emp = employees.find(e => e.id === empId);
+        if (!emp) return;
+
+        currentAuthTargetEmpId = empId;
+
+        if (isSuperAdminMode()) {
+            if (currentAuthMode === 'apply') {
+                authenticatedApplyEmp = emp;
+                document.getElementById('applyDept').value = emp.dept;
+                document.getElementById('applyPosition').value = emp.position;
+            } else if (currentAuthMode === 'personal') {
+                authenticatedPersonalEmp = emp;
+                renderPersonalView(emp);
+            }
+            return;
+        }
+
+        document.getElementById('authModalSubtext').innerText = `[${emp.dept}] ${emp.name} ${emp.position} 님의 생년월일 6자리를 입력하세요.`;
+        document.getElementById('empBirthInput').value = '';
+        document.getElementById('birthAuthModal').classList.add('active');
+        document.getElementById('empBirthInput').focus();
+    }
+
+    function verifyEmpBirth() {
+        const inputBirth = document.getElementById('empBirthInput').value.trim();
+        const emp = employees.find(e => e.id === currentAuthTargetEmpId);
+
+        if (emp && String(emp.birth || '').slice(0, 6) === inputBirth) {
+            document.getElementById('birthAuthModal').classList.remove('active');
+
+            if (currentAuthMode === 'apply') {
+                authenticatedApplyEmp = emp;
+                document.getElementById('applyDept').value = emp.dept;
+                document.getElementById('applyPosition').value = emp.position;
+            } else if (currentAuthMode === 'personal') {
+                authenticatedPersonalEmp = emp;
+                renderPersonalView(emp);
+            }
+        } else {
+            alert('생년월일이 일치하지 않습니다.');
+            cancelEmpAuth();
+        }
+    }
+
+    function cancelEmpAuth() {
+        document.getElementById('birthAuthModal').classList.remove('active');
+
+        if (currentAuthMode === 'apply') {
+            document.getElementById('applyEmpSelect').value = authenticatedApplyEmp ? authenticatedApplyEmp.id : '';
+            if (!authenticatedApplyEmp) resetApplyForm();
+        } else if (currentAuthMode === 'personal') {
+            document.getElementById('personalEmpSelect').value = authenticatedPersonalEmp ? authenticatedPersonalEmp.id : '';
+            if (!authenticatedPersonalEmp) resetPersonalView();
+        }
+    }
+
+    function resetApplyForm() {
+        authenticatedApplyEmp = null;
+        document.getElementById('applyEmpSelect').value = '';
+        document.getElementById('applyDept').value = '';
+        document.getElementById('applyPosition').value = '';
+    }
+
+    function resetPersonalView() {
+        authenticatedPersonalEmp = null;
+        document.getElementById('personalEmpSelect').value = '';
+        document.getElementById('p-generated').innerText = `-`;
+        document.getElementById('p-generated-sub').innerText = `-`;
+        document.getElementById('p-prevUsed').innerText = `-`;
+        document.getElementById('p-usedAnnual').innerText = `-`;
+        document.getElementById('p-usedHalf').innerText = `-`;
+        document.getElementById('p-substitute').innerText = `-`;
+        document.getElementById('p-congrat').innerText = `-`;
+        document.getElementById('p-education').innerText = `-`;
+        document.getElementById('p-remaining').innerText = `-`;
+        document.getElementById('personalTrashBtn').style.display = 'none';
+        document.getElementById('personalHistoryBody').innerHTML = `<tr><td colspan="5" style="color:#94a3b8;">사원을 선택해 주세요.</td></tr>`;
+    }
+
+    function getBaseDate() {
+        const v = document.getElementById('systemYearSelect').value;
+        return v ? new Date(v) : new Date(SYSTEM_BASE_YEAR, 11, 31);
+    }
+
+    function getServiceYears(emp) {
+        return Math.max(SYSTEM_BASE_YEAR - new Date(emp.joinDate).getFullYear(), 0);
+    }
+
+    const INSTALLMENT_START_YEAR = 2025;
+    const CATEGORIES = ['회계', '회계/입사일', '회계/1년미만'];
+    function getCategory(emp) {
+        if (CATEGORIES.includes(emp.category)) return emp.category;
+        const joinYear = new Date(emp.joinDate).getFullYear();
+        if (joinYear >= SYSTEM_BASE_YEAR) return '회계/1년미만';
+        if (joinYear >= INSTALLMENT_START_YEAR) return '회계/입사일';
+        return '회계';
+    }
+
+    function getFullYearGrant(emp, category) {
+        const joinDate = new Date(emp.joinDate);
+        const joinYear = joinDate.getFullYear();
+        const joinMonth = joinDate.getMonth() + 1;
+        const Y = SYSTEM_BASE_YEAR;
+        if (joinYear > Y) return 0;
+        if (joinYear === Y) return 12 - joinMonth;
+        if (joinYear === Y - 1) {
+            return category === '회계' ? 15 : (joinMonth - 1) + 15;
+        }
+        const n = Y - joinYear;
+        return Math.min(25, 15 + Math.floor((n - 1) / 2));
+    }
+
+    function calculateLeaveDetails(emp) {
+        const joinDate = new Date(emp.joinDate);
+        const joinYear = joinDate.getFullYear();
+        const Y = SYSTEM_BASE_YEAR;
+        const serviceYears = getServiceYears(emp);
+        const category = getCategory(emp);
+
+        let isRetired = !!emp.retireDate;
+        let isFirstYear = (joinYear === Y);
+        let isOneYearExp = (joinYear === Y - 1);
+
+        let generatedLeave = getFullYearGrant(emp, category);
+        let includePrevUsed = false;
+        let settleNote = '';
+
+        if (isRetired) {
+            const retire = new Date(emp.retireDate);
+            const retireYear = retire.getFullYear();
+
+            if (retireYear < Y) {
+                generatedLeave = 0;
+                settleNote = '적용년도 이전에 퇴사';
+            } else if (retireYear === Y) {
+                let diffMonths = (retire.getFullYear() - joinDate.getFullYear()) * 12 + (retire.getMonth() - joinDate.getMonth());
+                if (retire.getDate() < joinDate.getDate()) diffMonths--;
+
+                const monthsWorked = Math.max(0, Math.min(11, diffMonths));
+                const firstYearAfter = (joinYear === Y - 1 && category !== '회계');
+
+                if (joinYear === Y || (firstYearAfter && diffMonths < 12)) {
+                    generatedLeave = monthsWorked;
+                    includePrevUsed = true;
+                    settleNote = `입사 1년 미만 퇴사(입사일 이전) - 근무 ${Math.max(diffMonths, 0)}개월 발생분, 전년도 사용분 합산`;
+                } else if (firstYearAfter) {
+                    generatedLeave = 11 + 15;
+                    includePrevUsed = true;
+                    settleNote = '1년차 입사일 이후 퇴사 - 1년미만 발생 11개 + 15개, 전년도 사용분 합산';
+                } else if (joinYear < Y - 1 && (category === '회계/입사일' || category === '회계/1년미만')) {
+                    const annivThisYear = new Date(Y, joinDate.getMonth(), joinDate.getDate());
+                    if (retire >= annivThisYear) {
+                        settleNote = `${category} (2년차 이상) - 입사일(${annivThisYear.toLocaleDateString()}) 이후 퇴사: 12월 31일 소진 체계로 전체 연차 인정`;
+                    } else {
+                        generatedLeave = 0;
+                        settleNote = `${category} (2년차 이상) - 입사일(${annivThisYear.toLocaleDateString()}) 이전 퇴사: 입사일 도래 전이므로 올해 발생 연차 0개 처리`;
+                    }
+                } else {
+                    settleNote = '회계기준 - 입사일 구분 없이 올해 고지연차 전체 기준으로 정산';
+                }
+            }
+        }
+
+        let usedAnnual = 0;
+        let usedHalf = 0;
+        let substitute = 0;
+        let congrat = 0;
+        let education = 0;
+        let prevYearUsedSum = 0;
+
+        if (emp.history && emp.history.length > 0) {
+            emp.history.forEach(h => {
+                const hYear = new Date(h.start).getFullYear();
+                if (hYear === Y) {
+                    if (h.type === '연차') usedAnnual += h.days;
+                    else if (h.type.includes('반차') && !h.type.includes('대체') && !h.type.includes('교육')) usedHalf += 1;
+                    else if (h.type === '교육오전반차' || h.type === '교육오후반차') { education += h.days; }
+                    else if (h.type.includes('대체')) substitute += h.days;
+                    else if (h.type === '경조휴가') congrat += h.days;
+                    else if (h.type === '교육') education += h.days;
+                } else if (hYear < Y) {
+                    if (h.type === '연차') prevYearUsedSum += h.days;
+                    else if (h.type.includes('반차') && !h.type.includes('대체') && !h.type.includes('교육')) prevYearUsedSum += 0.5;
+                }
+            });
+        }
+
+        let effectivePrevUsed = 0;
+        if (isFirstYear) {
+            effectivePrevUsed = emp.prevYearUsed || 0;
+        } else {
+            effectivePrevUsed = prevYearUsedSum;
+        }
+
+        let totalUsed = usedAnnual + (usedHalf * 0.5);
+        if (includePrevUsed) totalUsed += effectivePrevUsed;
+        const settlementLeave = parseFloat(emp.settlementLeave) || 0;
+        const remaining = generatedLeave + settlementLeave - totalUsed;
+
+        return {
+            serviceYears,
+            category,
+            settleNote,
+            generatedLeave,
+            settlementLeave,
+            effectivePrevUsed,
+            isFirstYear,
+            isOneYearExp,
+            usedAnnual,
+            usedHalf,
+            substitute,
+            congrat,
+            education,
+            totalUsed,
+            remaining,
+            isRetired
+        };
+    }
+
+    function renderPersonalView(emp) {
+        if (!emp) return;
+
+        const res = calculateLeaveDetails(emp);
+
+        const serviceText = res.serviceYears < 1 ? '1년미만' : `${res.serviceYears}년차`;
+        const settleVal = res.settlementLeave || 0;
+        const settleStr = settleVal !== 0 ? (settleVal > 0 ? `+${settleVal}` : `${settleVal}`) : '0';
+        const totalGen = res.generatedLeave + settleVal;
+
+        let subText = `${serviceText}(${res.generatedLeave}) | 정산(${settleStr}) (총 ${totalGen}개)`;
+
+        document.getElementById('p-generated').innerText = `${totalGen}개`;
+        document.getElementById('p-generated-sub').innerText = subText;
+
+        document.getElementById('p-prevUsed').innerText = `${res.effectivePrevUsed}개`;
+        document.getElementById('p-usedAnnual').innerText = `${res.usedAnnual}개`;
+        document.getElementById('p-usedHalf').innerText = `${res.usedHalf}회 (${res.usedHalf * 0.5}일)`;
+        document.getElementById('p-substitute').innerText = `${res.substitute}개`;
+        document.getElementById('p-congrat').innerText = `${res.congrat}개`;
+        document.getElementById('p-education').innerText = `${res.education}개`;
+
+        const trashCnt = (emp.trashHistory || []).length;
+        document.getElementById('personalTrashCount').innerText = trashCnt;
+        document.getElementById('personalTrashBtn').style.display = 'inline-flex';
+
+        if (res.remaining < 0) {
+            document.getElementById('p-remaining').innerText = `${res.remaining}개 (초과사용)`;
+        } else {
+            document.getElementById('p-remaining').innerText = `${res.remaining}개`;
+        }
+
+        const historyBody = document.getElementById('personalHistoryBody');
+        historyBody.innerHTML = '';
+        const yearHistory = (emp.history || []).filter(h => new Date(h.start).getFullYear() === SYSTEM_BASE_YEAR);
+        if (personalSort.key) sortHistoryList(yearHistory, personalSort.key, personalSort.dir);
+
+        if (yearHistory.length > 0) {
+            yearHistory.forEach((h, idx) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${idx + 1}</td>
+                    <td><span class="text-bold" style="color:${getLeaveColor(h.type)};">${h.type}</span></td>
+                    <td>${h.start} ~ ${h.end}</td>
+                    <td class="text-bold">${h.days}일</td>
+                    <td>${h.reason}</td>
+                `;
+                historyBody.appendChild(tr);
+            });
+        } else {
+            historyBody.innerHTML = `<tr><td colspan="5" style="color:#94a3b8;">${SYSTEM_BASE_YEAR}년도 사용 내역이 없습니다.</td></tr>`;
+        }
+    }
+
+    function cancelLeaveItem(empId, historyId) {
+        const emp = employees.find(e => e.id === empId);
+        if (!emp) return;
+
+        const historyIdx = emp.history.findIndex(h => h.id === historyId);
+        if (historyIdx === -1) return;
+
+        if (!confirm('해당 연차 신청을 취소(삭제)하시겠습니까?\n취소된 내역은 보관함으로 이동되며 일수가 환원됩니다.')) return;
+
+        const item = emp.history[historyIdx];
+        emp.history.splice(historyIdx, 1);
+        if (!emp.trashHistory) emp.trashHistory = [];
+
+        const now = new Date();
+        const deletedAt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+        emp.trashHistory.push({ ...item, deletedAt });
+        alert('연차가 취소되어 보관함으로 이동되었습니다.');
+        saveDataSilent();
+
+        if (authenticatedPersonalEmp && authenticatedPersonalEmp.id === empId) {
+            renderPersonalView(emp);
+        }
+        renderDashboard();
+    }
+
+    function openTrashModal(empId, restricted = false) {
+        isTrashModalRestricted = restricted;
+        const emp = employees.find(e => e.id === empId);
+        if (!emp) return;
+
+        currentTrashEmpId = empId;
+        document.getElementById('trashModalTitle').innerText = `[${emp.dept}] ${emp.name} ${emp.position} 님의 취소된 휴가 보관함`;
+
+        const subText = document.getElementById('trashModalSubText');
+        const actionBtns = document.getElementById('trashModalActionBtns');
+
+        if (isTrashModalRestricted) {
+            subText.innerText = '개인 사용현황에서는 조회만 가능하며, 복원 및 영구삭제 기능이 제한됩니다.';
+            actionBtns.style.display = 'none';
+        } else {
+            subText.innerText = '처리할 휴가 항목을 선택한 후 버튼을 누르세요.';
+            actionBtns.style.display = 'flex';
+        }
+
+        renderTrashTable(emp);
+        document.getElementById('trashModal').classList.add('active');
+    }
+
+    function openGlobalTrashModal() {
+        let allTrashItems = [];
+        employees.forEach(emp => {
+            if (emp.trashHistory && emp.trashHistory.length > 0) {
+                emp.trashHistory.forEach(item => {
+                    allTrashItems.push({
+                        ...item,
+                        empId: emp.id,
+                        empName: emp.name,
+                        empDept: emp.dept
+                    });
+                });
+            }
+        });
+
+        if (allTrashItems.length === 0) {
+            alert('보관된 취소 내역이 없습니다.');
+            return;
+        }
+
+        currentTrashEmpId = null;
+        isTrashModalRestricted = false;
+
+        document.getElementById('trashModalTitle').innerText = `📋 전체 직원 취소된 휴가 보관함 (총 ${allTrashItems.length}건)`;
+        document.getElementById('trashModalSubText').innerText = '전체 직원의 취소/삭제된 휴가 목록입니다. 처리할 항목을 선택하세요.';
+        document.getElementById('trashModalActionBtns').style.display = 'flex';
+
+        const tbody = document.getElementById('trashTableBody');
+        tbody.innerHTML = '';
+        document.getElementById('selectAllTrash').checked = false;
+
+        allTrashItems.forEach((item) => {
+            const tr = document.createElement('tr');
+            let badgeClass = 'badge badge-retired';
+            if (item.type.includes('교육')) badgeClass = 'badge badge-education';
+            tr.innerHTML = `
+                <td><input type="checkbox" class="trash-chk" data-empid="${item.empId}" value="${item.id}"></td>
+                <td style="font-size:11px; color:#64748b;">${item.deletedAt || '-'}</td>
+                <td><strong>${item.empName}</strong> <span style="font-size:11px; color:#64748b;">(${item.empDept})</span></td>
+                <td><span class="${badgeClass}">${item.type}</span></td>
+                <td>${item.start} ~ ${item.end}</td>
+                <td class="text-bold">${item.days}일</td>
+                <td>${item.reason}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('trashModal').classList.add('active');
+    }
+
+    function closeTrashModal() {
+        document.getElementById('trashModal').classList.remove('active');
+        renderDashboard();
+    }
+
+    function renderTrashTable(emp) {
+        const tbody = document.getElementById('trashTableBody');
+        tbody.innerHTML = '';
+        const selectAll = document.getElementById('selectAllTrash');
+        if (selectAll) selectAll.checked = false;
+
+        if (emp.trashHistory && emp.trashHistory.length > 0) {
+            emp.trashHistory.forEach((item) => {
+                const tr = document.createElement('tr');
+                let badgeClass = 'badge badge-retired';
+                if (item.type.includes('교육')) badgeClass = 'badge badge-education';
+                tr.innerHTML = `
+                    <td><input type="checkbox" class="trash-chk" value="${item.id}" ${isTrashModalRestricted ? 'disabled' : ''}></td>
+                    <td style="font-size:11px; color:#64748b;">${item.deletedAt || '-'}</td>
+                    <td><strong>${emp.name}</strong></td>
+                    <td><span class="${badgeClass}">${item.type}</span></td>
+                    <td>${item.start} ~ ${item.end}</td>
+                    <td class="text-bold">${item.days}일</td>
+                    <td>${item.reason}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } else {
+            tbody.innerHTML = `<tr><td colspan="7" style="color:#94a3b8; padding: 25px;">보관된 삭제/취소 내역이 없습니다.</td></tr>`;
+        }
+    }
+
+    function toggleSelectAllTrash(master) {
+        if (isTrashModalRestricted) return;
+        document.querySelectorAll('.trash-chk').forEach(chk => chk.checked = master.checked);
+    }
+
+    function restoreSelectedHistory() {
+        if (isTrashModalRestricted) {
+            alert('개인 사용현황에서는 복원 기능이 제한되어 있습니다.');
+            return;
+        }
+
+        const checkedBoxes = document.querySelectorAll('.trash-chk:checked');
+        if (checkedBoxes.length === 0) {
+            alert('복원할 휴가 항목을 선택하세요.');
+            return;
+        }
+
+        if (!confirm(`선택한 ${checkedBoxes.length}개의 항목을 다시 휴가 내역으로 복원하시겠습니까?`)) return;
+
+        if (currentTrashEmpId === null) {
+            checkedBoxes.forEach(chk => {
+                const hId = parseInt(chk.value);
+                const empId = parseInt(chk.getAttribute('data-empid'));
+                const emp = employees.find(e => e.id === empId);
+                if (emp && emp.trashHistory) {
+                    const trashIdx = emp.trashHistory.findIndex(t => t.id === hId);
+                    if (trashIdx !== -1) {
+                        const item = emp.trashHistory[trashIdx];
+                        delete item.deletedAt;
+                        emp.history.push(item);
+                        emp.trashHistory.splice(trashIdx, 1);
+                    }
+                }
+            });
+        } else {
+            const emp = employees.find(e => e.id === currentTrashEmpId);
+            if (!emp) return;
+            checkedBoxes.forEach(chk => {
+                const hId = parseInt(chk.value);
+                const trashIdx = emp.trashHistory.findIndex(t => t.id === hId);
+                if (trashIdx !== -1) {
+                    const item = emp.trashHistory[trashIdx];
+                    delete item.deletedAt;
+                    emp.history.push(item);
+                    emp.trashHistory.splice(trashIdx, 1);
+                }
+            });
+        }
+
+        alert('선택한 휴가 항목이 정상 복원되었습니다.');
+        saveDataSilent();
+        closeTrashModal();
+        renderDashboard();
+    }
+
+    function permanentlyDeleteSelectedHistory() {
+        if (isTrashModalRestricted) {
+            alert('개인 사용현황에서는 영구 삭제 기능이 제한되어 있습니다.');
+            return;
+        }
+
+        const checkedBoxes = document.querySelectorAll('.trash-chk:checked');
+        if (checkedBoxes.length === 0) {
+            alert('영구 삭제할 항목을 선택하세요.');
+            return;
+        }
+
+        if (!confirm(`⚠ 경고: 선택한 ${checkedBoxes.length}개의 항목을 영구 삭제하시겠습니까?\n이 작업은 복구할 수 없습니다.`)) return;
+
+        if (currentTrashEmpId === null) {
+            checkedBoxes.forEach(chk => {
+                const hId = parseInt(chk.value);
+                const empId = parseInt(chk.getAttribute('data-empid'));
+                const emp = employees.find(e => e.id === empId);
+                if (emp && emp.trashHistory) {
+                    const trashIdx = emp.trashHistory.findIndex(t => t.id === hId);
+                    if (trashIdx !== -1) emp.trashHistory.splice(trashIdx, 1);
+                }
+            });
+        } else {
+            const emp = employees.find(e => e.id === currentTrashEmpId);
+            if (!emp) return;
+            checkedBoxes.forEach(chk => {
+                const hId = parseInt(chk.value);
+                const trashIdx = emp.trashHistory.findIndex(t => t.id === hId);
+                if (trashIdx !== -1) emp.trashHistory.splice(trashIdx, 1);
+            });
+        }
+
+        alert('선택한 항목이 영구 삭제되었습니다.');
+        saveDataSilent();
+        closeTrashModal();
+        renderDashboard();
+    }
+
+    function sortTable(column) {
+        if (sortColumn === column) {
+            sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortColumn = column;
+            sortDirection = 'asc';
+        }
+        renderDashboard();
+    }
+
+    function toggleEditEmp(id) {
+        if (editingEmpId === id) {
+            editingEmpId = null;
+        } else {
+            editingEmpId = id;
+        }
+        renderDashboard();
+    }
+
+    function saveEmpEdit(id) {
+        const emp = employees.find(e => e.id === id);
+        if (!emp) return;
+
+        const newNo = document.getElementById(`edit-no-${id}`).value;
+        const newDept = document.getElementById(`edit-dept-${id}`).value;
+        const newName = document.getElementById(`edit-name-${id}`).value.trim();
+        const newPos = document.getElementById(`edit-pos-${id}`).value.trim();
+        const newJoin = document.getElementById(`edit-join-${id}`).value;
+
+        if (!newName || !newPos || !newJoin) {
+            alert('이름, 직급, 입사일은 비워둘 수 없습니다.');
+            return;
+        }
+
+        const noNum = normalizeEmployeeNo(newNo);
+        if (noNum === null) {
+            alert('번호는 1 이상의 숫자로 입력해 주세요.');
+            return;
+        }
+
+        const duplicateExists = employees.some(e => e.id !== id && Number(e.no) === noNum);
+        if (duplicateExists) {
+            if (!confirm(`${noNum}번은 이미 사용 중입니다.\n\n다른 직원 번호를 자동 조정해 ${noNum}번으로 정리할까요?`)) {
+                return;
+            }
+        }
+
+        const ok = setEmployeeNoWithAutoShift(id, noNum);
+        if (!ok) {
+            alert('번호 변경에 실패했습니다.');
+            return;
+        }
+
+        emp.dept = newDept;
+        emp.name = newName;
+        emp.position = newPos;
+        emp.joinDate = newJoin;
+
+        editingEmpId = null;
+        saveDataSilent();
+        renderDashboard();
+        alert('사원 정보가 수정되었습니다.');
+    }
+
+    function populateDashboardTeamFilter() {
+        const sel = document.getElementById('dashboardTeamFilter');
+        if (!sel || sel.options.length > 1) return;
+        DEPARTMENT_LIST.forEach(d => {
+            const o = document.createElement('option');
+            o.value = d;
+            o.textContent = d;
+            sel.appendChild(o);
+        });
+    }
+
+    function handleDashboardTeamFilter() {
+        renderDashboard();
+    }
+
+    function renderDashboard() {
+        populateDashboardTeamFilter();
+        updateEmpTrashCount();
+        const tbody = document.getElementById('dashboardTableBody');
+        tbody.innerHTML = '';
+
+        let processedList = employees.map((emp, originalIndex) => {
+            const res = calculateLeaveDetails(emp);
+            return { emp, res, originalIndex, displayNo: emp.no };
+        });
+        processedList.sort((a, b) => a.displayNo - b.displayNo);
+
+        const teamFilterEl = document.getElementById('dashboardTeamFilter');
+        const teamFilter = teamFilterEl ? teamFilterEl.value : '';
+        if (teamFilter) processedList = processedList.filter(item => item.emp.dept === teamFilter);
+        const teamLabelEl = document.getElementById('dashboardTeamLabel');
+        if (teamLabelEl) teamLabelEl.innerText = teamFilter ? ` - ${teamFilter}` : '';
+
+        if (sortColumn) {
+            processedList.sort((a, b) => {
+                let valA, valB;
+                if (sortColumn === 'displayNo') {
+                    valA = a.displayNo; valB = b.displayNo;
+                } else if (sortColumn === 'dept') {
+                    valA = a.emp.dept; valB = b.emp.dept;
+                } else if (sortColumn === 'name') {
+                    valA = a.emp.name; valB = b.emp.name;
+                } else if (sortColumn === 'position') {
+                    valA = a.emp.position; valB = b.emp.position;
+                } else if (sortColumn === 'joinDate') {
+                    valA = a.emp.joinDate; valB = b.emp.joinDate;
+                } else if (sortColumn === 'category') {
+                    valA = a.res.category; valB = b.res.category;
+                } else if (sortColumn === 'isRetired') {
+                    valA = a.res.isRetired ? 1 : 0; valB = b.res.isRetired ? 1 : 0;
+                }
+                if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+                if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        let totalEmpCount = processedList.length;
+        let activeCount = 0;
+        let retiredCount = 0;
+        let sumGenerated = 0;
+        let sumUsed = 0;
+        let sumRemaining = 0;
+        let totalTrashCount = 0;
+
+        processedList.forEach((item, sortedIdx) => {
+            const { emp, res, originalIndex } = item;
+            if (res.isRetired) retiredCount++;
+            else activeCount++;
+
+            sumGenerated += res.generatedLeave;
+            sumUsed += res.totalUsed;
+            sumRemaining += res.remaining;
+            totalTrashCount += (emp.trashHistory || []).length;
+
+            const statusBadge = res.isRetired
+                ? `<span class="badge badge-retired">퇴사</span>`
+                : `<span class="badge badge-active">재직</span>`;
+
+            let prevYearInput = `<input type="number" value="${res.effectivePrevUsed}" class="table-input" style="color:#c2410c; font-weight:bold; background-color:#fff7ed;" disabled>`;
+
+            if (res.isFirstYear) {
+                prevYearInput = `<input type="number" step="0.5" value="${emp.prevYearUsed || 0}" class="table-input" style="color:#c2410c; font-weight:bold;" onchange="updateEmpVal(${originalIndex}, 'prevYearUsed', this.value)">`;
+            }
+
+            const empTrashCount = (emp.trashHistory || []).length;
+            const trashBadgeHtml = empTrashCount > 0
+                ? `<span class="trash-badge">취소: ${empTrashCount}</span>`
+                : `<span style="color:#94a3b8; font-size:11px; margin-left:4px;">취소: 0</span>`;
+
+            const isEditing = (editingEmpId === emp.id);
+
+            let noCol = isEditing ? `<input type="number" id="edit-no-${emp.id}" value="${emp.no}" class="edit-table-input" style="width:45px !important; text-align:center;">` : emp.no;
+
+            let deptCol = isEditing ? `<select id="edit-dept-${emp.id}" class="edit-table-select">${DEPARTMENT_LIST.map(d=>`<option value="${d}" ${emp.dept===d?'selected':''}>${d}</option>`).join('')}</select>` : emp.dept;
+
+            let nameCol = isEditing ? `<input type="text" id="edit-name-${emp.id}" value="${emp.name}" class="edit-table-input">` : emp.name;
+
+            let posCol = isEditing ? `<input type="text" id="edit-pos-${emp.id}" value="${emp.position}" class="edit-table-input" style="width:60px !important;">` : emp.position;
+
+            let joinCol = isEditing ? `<input type="date" id="edit-join-${emp.id}" value="${emp.joinDate}" class="table-date-input" style="border-color:#3b82f6;">` : emp.joinDate;
+
+            let editBtnHtml = isEditing
+                ? `<button class="btn btn-primary" style="padding:4px 8px; font-size:11px;" onclick="saveEmpEdit(${emp.id})">저장</button>`
+                : `<button class="btn-edit" onclick="toggleEditEmp(${emp.id})">수정</button>`;
+
+            let manageButtonsHtml = `
+                <div style="display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap; margin-bottom: 4px;">
+                    ${editBtnHtml}
+                </div>
+                <div>
+                    <button class="btn btn-danger" style="padding:3px 6px; font-size:11px;" onclick="deleteEmp(${originalIndex})">삭제</button>
+                </div>
+            `;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${noCol}</td>
+                <td>${deptCol}</td>
+                <td><strong>${nameCol}</strong></td>
+                <td>${posCol}</td>
+                <td>${joinCol}</td>
+                <td style="white-space:nowrap;">
+                    <select class="category-select" onchange="updateEmpVal(${originalIndex}, 'category', this.value)">
+                        <option value="" ${!emp.category ? 'selected' : ''}>자동 (${res.category})</option>
+                        <option value="회계" ${emp.category === '회계' ? 'selected' : ''}>회계</option>
+                        <option value="회계/입사일" ${emp.category === '회계/입사일' ? 'selected' : ''}>회계/입사일</option>
+                        <option value="회계/1년미만" ${emp.category === '회계/1년미만' ? 'selected' : ''}>회계/1년미만</option>
+                    </select>
+                    <strong style="color:#2563eb; margin-left:2px;">${res.serviceYears < 1 ? '1년미만' : `${res.serviceYears}년차`}</strong>
+                </td>
+                <td>${statusBadge}</td>
+                <td><input type="date" value="${emp.retireDate || ''}" class="table-date-input" onchange="updateEmpVal(${originalIndex}, 'retireDate', this.value)"></td>
+                <td class="text-bold">${res.generatedLeave}개</td>
+                <td class="settlement-col"><input type="number" step="0.5" value="${res.settlementLeave}" class="table-input" onchange="updateEmpVal(${originalIndex}, 'settlementLeave', this.value)"></td>
+                <td class="prev-year-col" style="background:#fff7ed;">${prevYearInput}</td>
+                <td class="annual-usage-col text-bold">${res.usedAnnual}</td>
+                <td class="half-usage-col text-bold">${res.usedHalf}</td>
+                <td class="substitute-usage-col text-bold">${res.substitute}</td>
+                <td class="congrat-usage-col text-bold">${res.congrat}</td>
+                <td class="edu-usage-col text-bold" style="color:#0284c7;">${res.education}</td>
+                <td class="text-red">${res.totalUsed}개</td>
+                <td class="text-bold ${res.remaining < 0 ? 'text-red' : 'text-blue'}" style="font-size:14px;">
+                    ${res.remaining}개 ${res.remaining < 0 ? '<br><small style="color:#dc2626;">(초과)</small>' : ''}
+                </td>
+                <td>
+                    <div style="display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap;">
+                        <button class="btn btn-info" onclick="toggleDetail(${originalIndex})">상세보기</button>
+                        ${res.isRetired ? `<button class="btn btn-settle" onclick="showSettleAlert(${originalIndex})">정산안내</button>` : ''}
+                    </div>
+                    <div style="margin-top:6px;">${trashBadgeHtml}</div>
+                </td>
+                <td>${manageButtonsHtml}</td>
+            `;
+            tbody.appendChild(tr);
+
+            const detailTr = document.createElement('tr');
+            detailTr.id = `detail-row-${originalIndex}`;
+            detailTr.className = 'detail-row';
+
+            const historyStartDate = `${SYSTEM_BASE_YEAR}-01-01`;
+            const historyEndDate = `${SYSTEM_BASE_YEAR}-12-31`;
+            const historyRows = getDashboardHistoryRows(emp, historyStartDate, historyEndDate, 'all');
+
+            detailTr.innerHTML = `
+                <td colspan="20" style="padding: 0;">
+                    <div class="detail-box">
+                        <div class="detail-header" style="flex-wrap: wrap; gap: 10px;">
+                            <strong>📌 ${emp.name} (${emp.position}) 님의 ${SYSTEM_BASE_YEAR}년 상세 휴가 내역</strong>
+                            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                                <input type="date" id="detail-start-${emp.id}" value="${historyStartDate}" aria-label="조회 시작일">
+                                <span>~</span>
+                                <input type="date" id="detail-end-${emp.id}" value="${historyEndDate}" aria-label="조회 종료일">
+                                <select id="detail-type-${emp.id}" aria-label="휴가 구분">
+                                    <option value="all">전체</option>
+                                    <option value="annual">연차</option>
+                                    <option value="half">반차</option>
+                                    <option value="substitute">대체휴가</option>
+                                    <option value="congrat">경조휴가</option>
+                                    <option value="education">교육</option>
+                                </select>
+                                <button class="action-btn blue" type="button" style="padding:4px 10px; font-size:12px;" onclick="filterDashboardHistory(${emp.id})">조회</button>
+                                <span id="detail-result-${emp.id}" role="status" style="font-size:12px; color:#475569;">조회 결과 ${historyRows.count}건</span>
+                            </div>
+                            <button class="action-btn purple" style="padding: 4px 10px; font-size: 12px;" onclick="openTrashModal(${emp.id}, false)">🗑️ 취소된 휴가 보관함 (${empTrashCount})</button>
+                        </div>
+                        <table class="detail-table">
+                            <thead id="detail-head-${emp.id}">
+                                ${detailHeadHtml(emp.id)}
+                            </thead>
+                            <tbody id="detail-history-${emp.id}">${historyRows.html}</tbody>
+                        </table>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(detailTr);
+        });
+
+        document.getElementById('statTotalEmp').innerText = `${totalEmpCount}명`;
+        document.getElementById('statActiveRetired').innerText = `${activeCount}명 / ${retiredCount}명`;
+        document.getElementById('statTotalGenerated').innerText = `${sumGenerated}개`;
+        document.getElementById('statTotalUsed').innerText = `${sumUsed}개`;
+        document.getElementById('statTotalRemaining').innerText = `${sumRemaining}개`;
+        document.getElementById('globalTrashCount').innerText = totalTrashCount;
+
+        const selectedTeam = document.getElementById('accessTeamSelect').value;
+        populateEmpSelectOptions(selectedTeam);
+        refreshNewEmpNo();
+
+        renderCalendar();
+    }
+
+    function populateCalendarTeamFilter() {
+        const sel = document.getElementById('calendarTeamFilter');
+        if (!sel || sel.options.length > 1) return;
+        DEPARTMENT_LIST.forEach(d => {
+            const o = document.createElement('option');
+            o.value = d;
+            o.textContent = d;
+            sel.appendChild(o);
+        });
+    }
+
+    function handleCalendarTeamFilter() {
+        renderCalendar();
+    }
+
+    let personalSort = { key: null, dir: 'asc' };
+    const detailSort = {};
+
+    function sortHistoryList(list, key, dir) {
+        const m = dir === 'desc' ? -1 : 1;
+        list.sort((a, b) => {
+            let r;
+            if (key === 'type') {
+                r = String(a.type).localeCompare(String(b.type), 'ko') || String(a.start).localeCompare(String(b.start));
+            } else {
+                r = String(a.start).localeCompare(String(b.start)) || String(a.end).localeCompare(String(b.end));
+            }
+            return r * m;
+        });
+    }
+
+    function sortArrow(st, key) {
+        return st && st.key === key ? (st.dir === 'asc' ? '↑' : '↓') : '↕';
+    }
+
+    function nextSort(st, key) {
+        if (st && st.key === key) return { key, dir: st.dir === 'asc' ? 'desc' : 'asc' };
+        return { key, dir: 'asc' };
+    }
+
+    function sortPersonalHistory(key) {
+        if (!authenticatedPersonalEmp) return;
+        personalSort = nextSort(personalSort, key);
+        document.getElementById('psortTypeBtn').innerText = '정렬' + sortArrow(personalSort, 'type');
+        document.getElementById('psortPeriodBtn').innerText = '정렬' + sortArrow(personalSort, 'period');
+        renderPersonalView(authenticatedPersonalEmp);
+    }
+
+    function detailHeadHtml(empId) {
+        const st = detailSort[empId];
+        return '<tr><th>번호</th>'
+            + '<th>구분<button type="button" class="sort-btn" onclick="toggleDetailSort(' + empId + ",'type')\">정렬" + sortArrow(st, 'type') + '</button></th>'
+            + '<th>사용 기간<button type="button" class="sort-btn" onclick="toggleDetailSort(' + empId + ",'period')\">정렬" + sortArrow(st, 'period') + '</button></th>'
+            + '<th>사용 일수</th><th>사유</th><th>관리</th></tr>';
+    }
+
+    function toggleDetailSort(empId, key) {
+        detailSort[empId] = nextSort(detailSort[empId], key);
+        const head = document.getElementById('detail-head-' + empId);
+        if (head) head.innerHTML = detailHeadHtml(empId);
+        filterDashboardHistory(empId);
+    }
+
+    function getLeaveColor(type) {
+        type = String(type || '');
+        if (type.includes('반차')) return '#8b5cf6';
+        if (type.includes('대체')) return '#10b981';
+        if (type.includes('경조')) return '#f59e0b';
+        if (type.includes('교육')) return '#0284c7';
+        return '#3b82f6';
+    }
+
+    function renderCalendar() {
+        const calendarEl = document.getElementById('calendar');
+        if (!calendarEl) return;
+
+        populateCalendarTeamFilter();
+        const calTeamEl = document.getElementById('calendarTeamFilter');
+        const calTeam = calTeamEl ? calTeamEl.value : '';
+        const calLabelEl = document.getElementById('calendarTeamLabel');
+        if (calLabelEl) calLabelEl.innerText = calTeam ? ` - ${calTeam}` : '';
+
+        let events = [];
+        employees.forEach(emp => {
+            if (calTeam && emp.dept !== calTeam) return;
+            if (emp.history && emp.history.length > 0) {
+                emp.history.forEach(h => {
+                    let endDateObj = new Date(h.end);
+                    endDateObj.setDate(endDateObj.getDate() + 1);
+                    let formattedEndDate = endDateObj.toISOString().split('T')[0];
+                    const color = getLeaveColor(h.type);
+
+                    events.push({
+                        title: `[${emp.name}] ${h.type} (${h.days}일)`,
+                        start: h.start,
+                        end: formattedEndDate,
+                        backgroundColor: color,
+                        borderColor: color,
+                        extendedProps: {
+                            dept: emp.dept,
+                            name: emp.name,
+                            reason: h.reason,
+                            type: h.type
+                        }
+                    });
+                });
+            }
+        });
+
+        let keepDate = null, keepView = 'dayGridMonth';
+        if (calendarInstance) {
+            keepDate = calendarInstance.getDate();
+            keepView = calendarInstance.view.type;
+            calendarInstance.destroy();
+        }
+
+        calendarInstance = new FullCalendar.Calendar(calendarEl, {
+            initialView: keepView,
+            initialDate: keepDate || undefined,
+            locale: 'ko',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek'
+            },
+            events: events,
+            eventClick: function(info) {
+                const p = info.event.extendedProps;
+                let originalEndStr = info.event.end ? new Date(new Date(info.event.end).getTime() - 86400000).toISOString().split('T')[0] : info.event.startStr;
+                alert(`📌 연차 일정 상세\n\n• 직원: ${p.name} (${p.dept})\n• 구분: ${p.type}\n• 기간: ${info.event.startStr} ~ ${originalEndStr}\n• 사유: ${p.reason}`);
+            }
+        });
+
+        calendarInstance.render();
+    }
+
+    function getDashboardHistoryRows(emp, startDate, endDate, selectedType) {
+        const filteredHistory = (emp.history || []).filter(h => {
+            const overlapsPeriod = h.start <= endDate && h.end >= startDate;
+            const typeMatches = selectedType === 'all'
+                || (selectedType === 'annual' && h.type === '연차')
+                || (selectedType === 'half' && h.type.includes('반차') && !h.type.includes('대체') && !h.type.includes('교육'))
+                || (selectedType === 'substitute' && h.type.includes('대체'))
+                || (selectedType === 'congrat' && h.type === '경조휴가')
+                || (selectedType === 'education' && h.type.includes('교육'));
+            return overlapsPeriod && typeMatches;
+        });
+
+        const st = detailSort[emp.id];
+        if (st && st.key) sortHistoryList(filteredHistory, st.key, st.dir);
+
+        if (filteredHistory.length === 0) {
+            return { html: '<tr><td colspan="6" style="color:#94a3b8;">선택한 기간과 휴가 구분에 해당하는 내역이 없습니다.</td></tr>', count: 0 };
+        }
+
+        const html = filteredHistory.map((h, index) => {
+            return `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td><span class="text-bold" style="color:${getLeaveColor(h.type)};">${h.type}</span></td>
+                    <td>${h.start} ~ ${h.end}</td>
+                    <td>${h.days}일</td>
+                    <td>${h.reason}</td>
+                    <td><button class="btn-cancel-item" onclick="cancelLeaveItem(${emp.id}, ${h.id})">취소</button></td>
+                </tr>
+            `;
+        }).join('');
+        return { html, count: filteredHistory.length };
+    }
+
+    function filterDashboardHistory(empId) {
+        const emp = employees.find(employee => employee.id === empId);
+        if (!emp) return;
+
+        const startDate = document.getElementById(`detail-start-${empId}`).value;
+        const endDate = document.getElementById(`detail-end-${empId}`).value;
+        if (!startDate || !endDate) {
+            alert('조회 시작일과 종료일을 모두 선택해 주세요.');
+            return;
+        }
+        if (startDate > endDate) {
+            alert('조회 시작일은 종료일보다 늦을 수 없습니다.');
+            return;
+        }
+
+        const selectedType = document.getElementById(`detail-type-${empId}`).value;
+        const result = getDashboardHistoryRows(emp, startDate, endDate, selectedType);
+        document.getElementById(`detail-history-${empId}`).innerHTML = result.html;
+        document.getElementById(`detail-result-${empId}`).innerText = `조회 결과 ${result.count}건`;
+    }
+
+    function showSettleAlert(index) {
+        const emp = employees[index];
+        const res = calculateLeaveDetails(emp);
+
+        let msg = `[퇴사 정산 안내 - ${emp.name}님]\n\n`;
+        msg += `• 입사일: ${emp.joinDate}\n`;
+        msg += `• 퇴사일: ${emp.retireDate}\n`;
+        msg += `• 인정 전체 발생 연차: ${res.generatedLeave}개\n`;
+        if (res.settleNote) msg += `• 산정 기준: ${res.settleNote}\n`;
+        msg += `• 총 사용 차감: ${res.totalUsed}개\n`;
+        msg += `-----------------------------------\n`;
+
+        if (res.remaining < 0) {
+            msg += `• 정산 결과: ${Math.abs(res.remaining)}개 초과 사용 (급여 차감/반납 대상)`;
+        } else {
+            msg += `• 정산 결과: ${res.remaining}개 미사용 (퇴사 수당 지급 대상)`;
+        }
+
+        alert(msg);
+    }
+
+    function populateEmpSelectOptions(selectedTeam = "소방팀") {
+        const applySelect = document.getElementById('applyEmpSelect');
+        const personalSelect = document.getElementById('personalEmpSelect');
+
+        applySelect.innerHTML = '<option value="">-- 사원 선택 --</option>';
+        personalSelect.innerHTML = '<option value="">-- 사원 선택 --</option>';
+
+        employees.forEach(emp => {
+            if (selectedTeam === "전체 (총괄 관리자)" || emp.dept === selectedTeam) {
+                const opt1 = document.createElement('option');
+                opt1.value = emp.id;
+                opt1.innerText = `[${emp.dept}] ${emp.name} ${emp.position}`;
+                applySelect.appendChild(opt1);
+
+                const opt2 = document.createElement('option');
+                opt2.value = emp.id;
+                opt2.innerText = `[${emp.dept}] ${emp.name} ${emp.position}`;
+                personalSelect.appendChild(opt2);
+            }
+        });
+    }
+
+    function toggleDetail(index) {
+        document.getElementById(`detail-row-${index}`).classList.toggle('active');
+    }
+
+    function calculateApplyDays() {
+        const type = document.getElementById('applyType').value;
+        const start = new Date(document.getElementById('applyStart').value);
+        const end = new Date(document.getElementById('applyEnd').value);
+
+        if (type.includes('반차')) {
+            document.getElementById('applyDays').value = 0.5;
+            document.getElementById('applyEnd').value = document.getElementById('applyStart').value;
+            return;
+        }
+
+        if (start && end && !isNaN(start) && !isNaN(end)) {
+            const diffTime = end - start;
+            if (diffTime < 0) {
+                document.getElementById('applyDays').value = 0;
+                return;
+            }
+            document.getElementById('applyDays').value = (diffTime / (1000 * 60 * 60 * 24)) + 1;
+        }
+    }
+
+    function handleApplySubmit(e) {
+        e.preventDefault();
+
+        if (!authenticatedApplyEmp) {
+            alert('신청할 사원을 선택해 주세요.');
+            return;
+        }
+
+        const emp = authenticatedApplyEmp;
+        const days = parseFloat(document.getElementById('applyDays').value);
+        const type = document.getElementById('applyType').value;
+        const start = document.getElementById('applyStart').value;
+        const end = document.getElementById('applyEnd').value;
+        const reason = document.getElementById('applyReason').value;
+
+        if (days <= 0) {
+            alert('올바른 휴가 기간을 설정해 주세요.');
+            return;
+        }
+
+        const dup = findDuplicateLeave(emp, type, start, end);
+        if (dup) {
+            alert(`이미 신청된 휴가와 날짜가 겹칩니다.\n\n[기존 신청] ${dup.type} (${dup.start} ~ ${dup.end})\n\n날짜를 확인해 주세요.`);
+            return;
+        }
+
+        const isDeductionTarget = !type.includes('대체') && type !== '경조휴가' && !type.includes('교육');
+        if (isDeductionTarget) {
+            const res = calculateLeaveDetails(emp);
+            if (days > res.remaining) {
+                const inputPin = prompt("연차 사용 초과 입니다 관리자에게 문의 하세요\n\n(관리자 승인 번호를 입력하면 신청이 가능합니다)");
+                if (inputPin === null) return;
+                if (inputPin !== '1234') {
+                    alert("관리자 승인 번호가 일치하지 않습니다. 신청이 취소됩니다.");
+                    return;
+                }
+            }
+        }
+
+        openReportModal({ emp, type, start, end, days, reason });
+    }
+
+    function leaveSlots(type) {
+        if (type.includes('오전')) return ['AM'];
+        if (type.includes('오후')) return ['PM'];
+        return ['AM', 'PM'];
+    }
+
+    function eachDate(start, end) {
+        const out = [];
+        const d = new Date(start + 'T00:00:00');
+        const e = new Date((end || start) + 'T00:00:00');
+        while (d <= e && out.length < 400) {
+            out.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+            d.setDate(d.getDate() + 1);
+        }
+        return out;
+    }
+
+    function findDuplicateLeave(emp, type, start, end) {
+        const newSlots = leaveSlots(type);
+        const newDates = new Set(eachDate(start, end));
+        return (emp.history || []).find(h => {
+            if (!h.start) return false;
+            const hSlots = leaveSlots(h.type || '');
+            if (!hSlots.some(sl => newSlots.includes(sl))) return false;
+            return eachDate(h.start, h.end || h.start).some(d => newDates.has(d));
+        }) || null;
+    }
+
+    let pendingApply = null;
+
+    function mapReportType(type) {
+        if (type.includes('교육')) return '교육';
+        if (type === '연차') return '연차';
+        if (type === '오전반차' || type === '오후반차') return '반차';
+        if (type.includes('대체')) return '대체';
+        if (type === '경조휴가') return '축휴';
+        return '연차';
+    }
+
+    function findTeamLeaderName(emp) {
+        const leader = employees.find(e => e.id !== emp.id && e.dept === emp.dept && !e.retireDate && String(e.position || '').includes('팀장'));
+        return leader ? leader.name : '';
+    }
+
+    function openReportModal(data) {
+        pendingApply = data;
+        const { emp, type, start, end, days, reason } = data;
+        const rptType = mapReportType(type);
+
+        document.getElementById('rptType').innerText = rptType;
+        document.querySelectorAll('#reportModal .rpt-intro .opt').forEach(o => {
+            o.classList.toggle('on', o.getAttribute('data-val') === rptType);
+        });
+        document.getElementById('rptTeam').value = emp.dept || '';
+        document.getElementById('rptName').value = emp.name || '';
+        document.getElementById('rptDays').value = days;
+        document.getElementById('rptHalfAm').checked = type.includes('오전');
+        document.getElementById('rptHalfPm').checked = type.includes('오후');
+        document.getElementById('rptStart').value = start;
+        document.getElementById('rptEnd').value = end;
+        document.getElementById('rptReason').value = reason;
+        document.getElementById('rptLeader').value = findTeamLeaderName(emp);
+
+        document.getElementById('reportModal').classList.add('active');
+        document.getElementById('reportModal').scrollTop = 0;
+    }
+
+    function closeReportModal() {
+        document.getElementById('reportModal').classList.remove('active');
+        pendingApply = null;
+    }
+
+    function confirmReportSave() {
+        if (!pendingApply) return;
+        const { emp, type, start, end, days, reason } = pendingApply;
+        const reportLeader = document.getElementById('rptLeader').value.trim();
+
+        if (!emp.history) emp.history = [];
+        emp.history.push({ id: Date.now(), type, start, end, days, reason, reportLeader });
+
+        pendingApply = null;
+        document.getElementById('reportModal').classList.remove('active');
+
+        alert(`${emp.name} 님의 ${type} 신청이 완료되었습니다.`);
+        saveDataSilent();
+        resetApplyForm();
+        renderDashboard();
+    }
+
+    function printReport() {
+        document.body.classList.add('rpt-printing');
+        const done = () => {
+            document.body.classList.remove('rpt-printing');
+            window.removeEventListener('afterprint', done);
+        };
+        window.addEventListener('afterprint', done);
+        window.print();
+    }
+
+    const FIREBASE_CONFIG = {
+        apiKey: "AIzaSyB_ahgFPhi3jH5F_UFnmeAKCOddqWBeTj4",
+        authDomain: "risk-system-24d05.firebaseapp.com",
+        projectId: "risk-system-24d05",
+        storageBucket: "risk-system-24d05.firebasestorage.app",
+        messagingSenderId: "66137542505",
+        appId: "1:66137542505:web:188fdc7333c6a78880b7f8"
+    };
+
+    let firestoreDb = null;
+    let firestoreEnabled = false;
+    let firestoreSaveTimer = null;
+
+    function isFirebaseConfigured() {
+        return FIREBASE_CONFIG.apiKey &&
+            !FIREBASE_CONFIG.apiKey.startsWith('여기에') &&
+            FIREBASE_CONFIG.projectId &&
+            !FIREBASE_CONFIG.projectId.startsWith('여기에') &&
+            FIREBASE_CONFIG.appId &&
+            !FIREBASE_CONFIG.appId.startsWith('여기에');
+    }
+
+    function initFirestore() {
+        if (!isFirebaseConfigured()) {
+            console.info('[Firestore] Firebase 설정 전: 기존 브라우저 저장 방식으로 동작합니다.');
+            const status = document.getElementById('firestoreStatus');
+            if (status) status.textContent = '☁️ Firestore 미설정';
+            return false;
+        }
+        try {
+            if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+            firestoreDb = firebase.firestore();
+            firestoreEnabled = true;
+            console.info('[Firestore] 연결 준비 완료');
+            const status = document.getElementById('firestoreStatus');
+            if (status) { status.textContent = '☁️ Firestore 연결됨'; status.style.color = '#059669'; }
+            return true;
+        } catch (e) {
+            console.error('[Firestore] 초기화 실패:', e);
+            firestoreEnabled = false;
+            return false;
+        }
+    }
+
+    const FIRESTORE_COLLECTION = 'annual_system';
+    const FIRESTORE_DOCUMENT = 'dataStore';
+
+    async function loadDataFromFirestore() {
+        if (!firestoreEnabled || !firestoreDb) return false;
+        try {
+            const snap = await firestoreDb.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOCUMENT).get();
+            if (!snap.exists) return false;
+
+            const data = snap.data() || {};
+            if (Array.isArray(data.employees)) {
+                employees = data.employees;
+                safeLocalSet('annual_leave_employees', JSON.stringify(employees));
+            }
+            if (Array.isArray(data.deletedEmployees)) {
+                deletedEmployees = data.deletedEmployees;
+                safeLocalSet('annual_leave_deleted_employees', JSON.stringify(deletedEmployees));
+            }
+            if (Number.isFinite(Number(data.systemBaseYear))) {
+                SYSTEM_BASE_YEAR = Number(data.systemBaseYear);
+                const yearInput = document.getElementById('systemYearSelect');
+                if (yearInput) yearInput.value = SYSTEM_BASE_YEAR + '-12-31';
+            }
+            return true;
+        } catch (e) {
+            console.error('[Firestore] 데이터 불러오기 실패:', e);
+            const status = document.getElementById('firestoreStatus');
+            if (status) {
+                status.textContent = '☁️ Firestore 오류';
+                status.style.color = '#dc2626';
+            }
+            return false;
+        }
+    }
+
+    async function syncToFirestore() {
+        if (!firestoreEnabled || !firestoreDb) return false;
+        try {
+            await firestoreDb.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOCUMENT).set({
+                employees: employees,
+                deletedEmployees: deletedEmployees,
+                systemBaseYear: SYSTEM_BASE_YEAR,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            const status = document.getElementById('firestoreStatus');
+            if (status) {
+                status.textContent = '☁️ Firestore 저장됨';
+                status.style.color = '#059669';
+            }
+            return true;
+        } catch (e) {
+            console.error('[Firestore] 저장 실패:', e);
+            const status = document.getElementById('firestoreStatus');
+            if (status) {
+                status.textContent = '☁️ 저장 오류';
+                status.style.color = '#dc2626';
+            }
+            return false;
+        }
+    }
+
+    // 브라우저 저장 공간(5MB)이 가득 차도 오류로 멈추지 않도록 보호
+    function safeLocalSet(key, value) {
+        try {
+            localStorage.setItem(key, value);
+            return true;
+        } catch (e) {
+            console.warn('[localStorage] 저장 실패:', key, e);
+            try { localStorage.removeItem(key); } catch (e2) {}  // 오래된 값이 남아 되살아나지 않도록 제거
+            return false;
+        }
+    }
+
+    function saveDataSilent() {
+        const ok1 = safeLocalSet('annual_leave_employees', JSON.stringify(employees));
+        const ok2 = safeLocalSet('annual_leave_deleted_employees', JSON.stringify(deletedEmployees));
+
+        // 브라우저 저장 공간이 부족해도 안내창은 띄우지 않음 (Firestore 연결 시 클라우드에 정상 저장)
+        if (!(ok1 && ok2) && !firestoreEnabled) {
+            const status = document.getElementById('firestoreStatus');
+            if (status) { status.textContent = '⚠️ 브라우저 저장 공간 부족'; status.style.color = '#dc2626'; }
+        }
+
+        if (firestoreEnabled) {
+            clearTimeout(firestoreSaveTimer);
+            firestoreSaveTimer = setTimeout(() => {
+                syncToFirestore();
+            }, 350);
+        }
+    }
+
+    const UPLOAD_HEADERS = {
+        no: ['번호', '순번', 'No'],
+        dept: ['부서/팀', '부서', '팀'],
+        name: ['이름', '성명'],
+        position: ['직급', '직위'],
+        birth: ['주민등록번호', '주민번호', '주민', '생년월일', '생년'],
+        join: ['입사일', '입사'],
+        retire: ['퇴사일', '퇴사'],
+        category: ['구분'],
+        prev: ['이전년도사용', '이전년도']
+    };
+
+    function normHeader(h) {
+        return String(h ?? '')
+            .trim()
+            .replace(/[\s()（）\[\]·]/g, '')
+            .replace(/\(.*?\)/g, '')
+            .toLowerCase();
+    }
+
+    function findColumns(headerRow) {
+        const cols = {};
+        const used = new Set();
+        const norm = headerRow.map((h, idx) => ({
+            idx,
+            norm: normHeader(h),
+            orig: String(h ?? '').trim()
+        }));
+        const keys = Object.keys(UPLOAD_HEADERS);
+
+        // 1차: 열 제목이 별칭과 정확히 일치하는 열을 먼저 확정
+        keys.forEach(key => {
+            const aliases = UPLOAD_HEADERS[key].map(a => normHeader(a));
+            const found = norm.find(h => h.norm && !used.has(h.idx) && aliases.includes(h.norm));
+            if (found) { cols[key] = found.idx; used.add(found.idx); }
+        });
+
+        // 2차: 정확히 일치하지 않은 항목만, 열 제목이 별칭을 포함하는 경우로 찾음
+        // (예: "주민번호(또는 생년월일 6자리)" -> 주민번호). 이미 쓰인 열은 제외
+        keys.forEach(key => {
+            if (cols[key] !== undefined) return;
+            const aliases = UPLOAD_HEADERS[key].map(a => normHeader(a));
+            const found = norm.find(h => h.norm && !used.has(h.idx) && aliases.some(a => h.norm.includes(a)));
+            if (found) { cols[key] = found.idx; used.add(found.idx); }
+        });
+
+        return cols;
+    }
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
+    function parseDateCell(v) {
+        if (v === '' || v === null || v === undefined) return '';
+        if (v instanceof Date) {
+            const d = new Date(v.getTime() + 12 * 3600 * 1000);
+            return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        }
+
+        if (typeof v === 'number') {
+            if (v > 19000101 && v < 21001231) v = String(v);
+            else {
+                const d = new Date(Math.round((v - 25569) * 86400 * 1000) + 12 * 3600 * 1000);
+                return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+            }
+        }
+
+        const str = String(v).trim();
+
+        let m = str.match(/^(\d{4})[-./\s]+(\d{1,2})[-./\s]+(\d{1,2})/);
+        if (m) {
+            const y = +m[1], mo = +m[2], d = +m[3];
+            if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return `${y}-${pad2(mo)}-${pad2(d)}`;
+        }
+
+        m = str.match(/^(\d{4})(\d{2})(\d{2})$/);
+        if (m) {
+            const y = +m[1], mo = +m[2], d = +m[3];
+            if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return `${y}-${pad2(mo)}-${pad2(d)}`;
+        }
+
+        m = str.match(/^(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+        if (m) {
+            const mo = +m[1], d = +m[2];
+            if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return `${SYSTEM_BASE_YEAR}-${pad2(mo)}-${pad2(d)}`;
+        }
+
+        m = str.match(/^(\d{1,2})[\/.\-](\d{1,2})(?!\d)/);
+        if (m) {
+            const mo = +m[1], d = +m[2];
+            if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return `${SYSTEM_BASE_YEAR}-${pad2(mo)}-${pad2(d)}`;
+        }
+
+        return null;
+    }
+
+    function parseBirthCell(v) {
+        if (v === '' || v === null || v === undefined) return '';
+        let str = String(v).replace(/[^0-9]/g, '');
+        if (!str) return null;
+
+        if (str.length === 13) return str.slice(0, 7);
+        if (str.length === 12) str = '0' + str;
+        if (str.length >= 7) return str.slice(0, 7);
+        if (str.length === 6) return str;
+        return null;
+    }
+
+    function parseCsv(text) {
+        text = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        const rows = [];
+        let row = [], cur = '', inQuote = false;
+
+        for (let i = 0; i < text.length; i++) {
+            const c = text[i];
+            if (inQuote) {
+                if (c === '"' && text[i + 1] === '"') {
+                    cur += '"';
+                    i++;
+                } else if (c === '"') {
+                    inQuote = false;
+                } else {
+                    cur += c;
+                }
+            } else {
+                if (c === '"') {
+                    inQuote = true;
+                } else if (c === ',') {
+                    row.push(cur.trim());
+                    cur = '';
+                } else if (c === '\n') {
+                    row.push(cur.trim());
+                    if (row.some(cell => String(cell).trim() !== '')) rows.push(row);
+                    row = [];
+                    cur = '';
+                } else if (c === '\t') {
+                    row.push(cur.trim());
+                    cur = '';
+                } else {
+                    cur += c;
+                }
+            }
+        }
+
+        if (cur.trim() !== '' || row.length > 0) {
+            row.push(cur.trim());
+            if (row.some(cell => String(cell).trim() !== '')) rows.push(row);
+        }
+
+        return rows;
+    }
+
+    function downloadUploadTemplate() {
+        const header = ['번호', '부서/팀', '이름', '직급', '주민번호(또는 생년월일 6자리)', '입사일', '퇴사일', '구분', '이전년도 사용'];
+        const sample = [
+            [1, '관리', '홍길동', '관리소장', '800101-1234567', '2015-01-02', '', '회계', ''],
+            [2, '소방팀', '김영희', '소방팀장', '850815-2345678', '2025-05-01', '', '', ''],
+            [3, '입주사 미화', '박철수', '미화원(여)', '950303-1456789', '2026-05-01', '', '', '']
+        ];
+        if (typeof XLSX !== 'undefined') {
+            const ws = XLSX.utils.aoa_to_sheet([header, ...sample]);
+            ws['!cols'] = [{wch: 6}, {wch: 12}, {wch: 10}, {wch: 16}, {wch: 30}, {wch: 12}, {wch: 12}, {wch: 10}, {wch: 14}];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '직원명부');
+            XLSX.writeFile(wb, '업로드_직원명부_양식.xlsx');
+        } else {
+            const csv = '\uFEFF' + [header, ...sample].map(r => r.join(',')).join('\r\n');
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}));
+            a.download = '업로드_직원명부_양식.csv';
+            a.click();
+        }
+    }
+
+    function handleRosterFile(input) {
+        const file = input.files && input.files[0];
+        input.value = '';
+        if (!file) return;
+
+        const isCsv = /\.csv$/i.test(file.name);
+        const reader = new FileReader();
+
+        reader.onerror = () => alert('파일을 읽을 수 없습니다.');
+        reader.onload = (ev) => {
+            try {
+                let rows;
+                if (isCsv) {
+                    rows = parseCsv(ev.target.result);
+                } else {
+                    if (typeof XLSX === 'undefined') {
+                        alert('엑셀 라이브러리를 불러오지 못했습니다.');
+                        return;
+                    }
+                    const wb = XLSX.read(ev.target.result, {type: 'array', cellDates: true});
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    rows = XLSX.utils.sheet_to_json(ws, {header: 1, defval: '', raw: true});
+                }
+                importRoster(rows);
+            } catch (err) {
+                console.error(err);
+                alert('파일을 처리하는 중 오류가 발생했습니다.\n' + err.message);
+            }
+        };
+
+        if (isCsv) reader.readAsText(file, 'UTF-8');
+        else reader.readAsArrayBuffer(file);
+    }
+
+    function importRoster(rows) {
+        rows = rows.filter(r => r.some(c => String(c).trim() !== ''));
+        if (rows.length < 2) { alert('데이터가 없습니다.'); return; }
+
+        const cols = findColumns(rows[0]);
+        const missing = ['dept', 'name', 'position', 'birth', 'join'].filter(k => cols[k] === undefined);
+        if (missing.length) {
+            const names = { dept: '부서/팀', name: '이름', position: '직급', birth: '주민번호', join: '입사일' };
+            alert('필수 열을 찾지 못했습니다: ' + missing.map(k => names[k]).join(', ') + '\n첫 행에 열 제목이 있어야 합니다.');
+            return;
+        }
+
+        const validDepts = Array.from(document.getElementById('newDept').options).map(o => o.value);
+        const get = (r, key) => (cols[key] === undefined ? '' : r[cols[key]]);
+
+        const toAdd = [], toUpdate = [], errors = [], warnings = [];
+
+        rows.slice(1).forEach((r, i) => {
+            const line = i + 2;
+            const deptRaw = String(get(r, 'dept')).trim();
+            const dept = validDepts.find(v => v.replace(/\s/g, '') === deptRaw.replace(/\s/g, '')) || deptRaw;
+            const name = String(get(r, 'name')).trim();
+            const position = String(get(r, 'position')).trim();
+            const birth = parseBirthCell(get(r, 'birth'));
+            const joinDate = parseDateCell(get(r, 'join'));
+            const retireDate = parseDateCell(get(r, 'retire'));
+            const catRaw = String(get(r, 'category')).replace(/\s/g, '');
+            const prevRaw = get(r, 'prev');
+
+            const errs = [];
+            if (!validDepts.includes(dept)) errs.push(`부서/팀 "${dept}" 없음`);
+            if (!name) errs.push('이름 없음');
+            if (!position) errs.push('직급 없음');
+            if (!birth) errs.push('주민번호/생년월일 형식 오류');
+            if (!joinDate) errs.push('입사일 형식 오류');
+            if (retireDate === null) errs.push('퇴사일 형식 오류');
+            if (errs.length) { errors.push(`${line}행(${name || '이름없음'}): ${errs.join(', ')}`); return; }
+
+            let category = '';
+            if (catRaw && catRaw !== '자동') {
+                if (CATEGORIES.includes(catRaw)) category = catRaw;
+                else warnings.push(`${line}행(${name}): 구분 "${catRaw}" 은(는) 자동으로 처리`);
+            }
+
+            const prevYearUsed = parseFloat(prevRaw) || 0;
+            const noFromFile = parseInt(get(r, 'no'));
+            const data = {dept, name, position, birth, joinDate, retireDate: retireDate || '', category, prevYearUsed, no: noFromFile};
+
+            const exist = employees.find(e => e.name === name && String(e.birth || '').slice(0, 6) === birth.slice(0, 6));
+            if (exist) toUpdate.push({exist, data});
+            else toAdd.push(data);
+        });
+
+        let msg = `[직원 명부 업로드 확인]\n\n신규 등록: ${toAdd.length}명\n기존 직원 정보 갱신: ${toUpdate.length}명\n오류로 제외: ${errors.length}행\n`;
+        if (errors.length) {
+            msg += '\n[오류 내용]\n' + errors.slice(0, 10).join('\n') + (errors.length > 10 ? `\n... 외 ${errors.length - 10}건` : '') + '\n';
+        }
+        if (toAdd.length + toUpdate.length === 0) { alert(msg + '\n반영할 직원이 없습니다.'); return; }
+        if (!confirm(msg + '\n이대로 반영할까요?')) return;
+
+        toUpdate.forEach(({exist, data}) => {
+            Object.assign(exist, {dept: data.dept, position: data.position, joinDate: data.joinDate, retireDate: data.retireDate, category: data.category});
+            if (String(data.birth).length > String(exist.birth || '').length) exist.birth = data.birth;
+            if (data.prevYearUsed) exist.prevYearUsed = data.prevYearUsed;
+        });
+
+        let seq = Date.now();
+        const usedNos = new Set(employees.map(e => e.no));
+        toAdd.forEach(d => {
+            let n = d.no;
+            if (!Number.isInteger(n) || n < 1 || usedNos.has(n)) {
+                n = 1;
+                while (usedNos.has(n)) n++;
+            }
+            usedNos.add(n);
+            employees.push({id: seq++, ...d, no: n, history: [], trashHistory: []});
+        });
+
+        saveDataSilent();
+        populateEmpSelectOptions(document.getElementById('accessTeamSelect').value);
+        renderDashboard();
+        alert(`반영 완료\n신규 ${toAdd.length}명 / 갱신 ${toUpdate.length}명`);
+    }
+
+    const USAGE_HEADERS = {
+        name: ['이름', '성명'],
+        birth: ['주민등록번호', '주민번호', '주민', '생년월일', '생년'],
+        type: ['휴가구분', '구분', '종류', '유형'],
+        start: ['시작일', '시작', '사용일', '사용시작일', '일자', '날짜', '휴가일'],
+        end: ['종료일', '종료', '끝일', '사용종료일'],
+        days: ['일수', '사용일수', '사용연차', '차감일수'],
+        reason: ['사유', '비고', '내용']
+    };
+    const USAGE_TYPES = ['연차', '오전반차', '오후반차', '대체휴가', '대체반차', '경조휴가', '교육', '교육오전반차', '교육오후반차'];
+    const USAGE_TYPE_ALIAS = {
+        '반차': '오전반차', '오전': '오전반차', '오후': '오후반차',
+        '대체휴무': '대체휴가', '대휴': '대체휴가', '대체': '대체휴가',
+        '경조': '경조휴가', '경조사': '경조휴가', '경조휴무': '경조휴가',
+        '교육휴가': '교육', '교육오전': '교육오전반차', '교육오후': '교육오후반차'
+    };
+
+    function findUsageColumns(headerRow) {
+        const cols = {};
+        const norm = headerRow.map(h => normHeader(h));
+        Object.keys(USAGE_HEADERS).forEach(key => {
+            const aliases = USAGE_HEADERS[key].map(a => normHeader(a));
+            let idx = norm.findIndex(h => aliases.includes(h));
+            if (idx < 0) idx = norm.findIndex(h => h && aliases.some(a => h.includes(a)));
+            if (idx >= 0) cols[key] = idx;
+        });
+        return cols;
+    }
+
+    function downloadUsageTemplate() {
+        const COLS = 48;
+        const header = new Array(COLS).fill('');
+        header[0] = '이름'; header[1] = '연차';
+        header[26] = '이름'; header[27] = '반차';
+
+        const list = employees.slice().sort((a, b) => (a.no || 0) - (b.no || 0));
+        const names = list.length ? list.map(e => e.name) : ['홍길동', '김영희'];
+        const body = names.map(n => {
+            const row = new Array(COLS).fill('');
+            row[0] = n; row[26] = n;
+            return row;
+        });
+        const aoa = [header, ...body];
+
+        if (typeof XLSX !== 'undefined') {
+            // 첨부 양식(연차_반차_사용내역.xlsx)과 동일: Sheet1 한 장, 1행 제목(이름/연차 · 이름/반차), 날짜 칸은 "mm월 dd일" 표시
+            const ws = XLSX.utils.aoa_to_sheet(aoa);
+            ws['!merges'] = [{s: {r: 0, c: 1}, e: {r: 0, c: 25}}, {s: {r: 0, c: 27}, e: {r: 0, c: 47}}];
+            ws['!cols'] = Array.from({length: COLS}, (_, i) => ({wch: (i === 0 || i === 26) ? 7 : 9.6}));
+            const dateFmt = 'mm"월" dd"일"';
+            for (let r = 1; r < aoa.length; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (c === 0 || c === 26) continue;
+                    const addr = XLSX.utils.encode_cell({r, c});
+                    if (!ws[addr]) ws[addr] = {t: 's', v: ''};
+                    ws[addr].z = dateFmt;
+                }
+            }
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+            XLSX.writeFile(wb, '연차_반차_사용내역.xlsx');
+        } else {
+            const csv = '\uFEFF' + aoa.map(r => r.join(',')).join('\r\n');
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}));
+            a.download = '연차_반차_사용내역.csv';
+            a.click();
+        }
+    }
+
+    function handleUsageFile(input) {
+        const file = input.files && input.files[0];
+        input.value = '';
+        if (!file) return;
+
+        const isCsv = /\.csv$/i.test(file.name);
+        const reader = new FileReader();
+        reader.onerror = () => alert('파일을 읽을 수 없습니다.');
+        reader.onload = (ev) => {
+            try {
+                let rows;
+                if (isCsv) {
+                    rows = parseCsv(ev.target.result);
+                } else {
+                    if (typeof XLSX === 'undefined') {
+                        alert('엑셀 라이브러리를 불러오지 못했습니다.');
+                        return;
+                    }
+                    const wb = XLSX.read(ev.target.result, {type: 'array', cellDates: true});
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    rows = XLSX.utils.sheet_to_json(ws, {header: 1, defval: '', raw: true});
+                }
+                importUsage(rows);
+            } catch (err) {
+                console.error(err);
+                alert('파일을 처리하는 중 오류가 발생했습니다.\n' + err.message);
+            }
+        };
+        if (isCsv) reader.readAsText(file, 'UTF-8');
+        else reader.readAsArrayBuffer(file);
+    }
+
+    function importUsageWide(rows) {
+        const normName = v => String(v === null || v === undefined ? '' : v).replace(/\s/g, '').toLowerCase();
+        const head = rows[0].map(h => normHeader(h));
+        const nameCols = [];
+        head.forEach((h, i) => { if (h === '이름' || h === '성명') nameCols.push(i); });
+        if (!nameCols.length) { alert('첫 줄에서 "이름" 열을 찾지 못했습니다.'); return; }
+
+        const sections = [];
+        const warnings = [];
+        nameCols.forEach((nc, k) => {
+            const from = nc + 1;
+            const to = (k + 1 < nameCols.length ? nameCols[k + 1] : head.length) - 1;
+            let label = '';
+            for (let j = from; j <= to; j++) { if (head[j]) { label = head[j]; break; } }
+            const type = USAGE_TYPES.includes(label) ? label : USAGE_TYPE_ALIAS[label];
+            if (!type) {
+                warnings.push(`"${label || '(제목 없음)'}" 구간은 휴가 구분을 알 수 없어 건너뜀`);
+                return;
+            }
+            if (label === '반차') warnings.push('반차는 오전/오후 구분이 없으면 "오전반차"로 등록 (날짜 뒤에 "오후"라고 적으면 오후반차)');
+            sections.push({nameCol: nc, from, to, type, label});
+        });
+
+        if (!sections.length) { alert('연차/반차 등 휴가 구분 제목을 찾지 못했습니다.'); return; }
+
+        const byName = new Map();
+        employees.forEach(e => {
+            const k = normName(e.name);
+            if (!byName.has(k)) byName.set(k, []);
+            byName.get(k).push(e);
+        });
+
+        const parseCell = (v) => {
+            let d = parseDateCell(v);
+            if (d) return d;
+            const str = String(v).trim();
+            let m = str.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/) || str.match(/^(\d{1,2})[\/.\-](\d{1,2})(?!\d)/);
+            if (m) {
+                const mo = +m[1], dd = +m[2];
+                if (mo >= 1 && mo <= 12 && dd >= 1 && dd <= 31) return `${SYSTEM_BASE_YEAR}-${pad2(mo)}-${pad2(dd)}`;
+            }
+            return null;
+        };
+
+        const toAdd = [], errors = [], dupList = [];
+        const unknown = new Map();
+        const pendingMap = new Map();
+        let dupCount = 0;
+
+        rows.slice(1).forEach((r, ri) => {
+            sections.forEach(sec => {
+                const nm = String(r[sec.nameCol] === undefined || r[sec.nameCol] === null ? '' : r[sec.nameCol]).trim();
+                if (!nm) return;
+
+                const cells = [];
+                for (let j = sec.from; j <= sec.to; j++) {
+                    const v = r[j];
+                    if (v === '' || v === null || v === undefined || String(v).trim() === '') continue;
+                    cells.push(v);
+                }
+                if (!cells.length) return;
+
+                const cands = byName.get(normName(nm)) || [];
+                if (!cands.length) {
+                    unknown.set(nm, (unknown.get(nm) || 0) + cells.length);
+                    return;
+                }
+                if (cands.length > 1) {
+                    errors.push(`${nm}: 같은 이름의 직원이 ${cands.length}명이라 구분할 수 없음`);
+                    return;
+                }
+                const emp = cands[0];
+
+                cells.forEach(v => {
+                    const date = parseCell(v);
+                    if (!date) {
+                        errors.push(`${nm} (${sec.label}): "${v}" 날짜 인식 불가`);
+                        return;
+                    }
+
+                    let type = sec.type;
+                    if (type.includes('반차') && typeof v === 'string') {
+                        const base = type.startsWith('교육') ? '교육' : '';
+                        if (v.includes('오후')) type = base + '오후반차';
+                        else if (v.includes('오전')) type = base + '오전반차';
+                    }
+
+                    const pend = pendingMap.get(emp.id) || [];
+                    const dup = findDuplicateLeave({history: [...(emp.history || []), ...pend]}, type, date, date);
+                    if (dup) {
+                        dupCount++;
+                        if (dupList.length < 4) dupList.push(`${nm} ${date}`);
+                        return;
+                    }
+                    const item = { type, start: date, end: date, days: type.includes('반차') ? 0.5 : 1, reason: '' };
+                    pend.push(item);
+                    pendingMap.set(emp.id, pend);
+                    toAdd.push({ emp, item });
+                });
+            });
+        });
+
+        const cnt = {};
+        toAdd.forEach(({ item }) => { cnt[item.type] = (cnt[item.type] || 0) + 1; });
+        const cntText = Object.keys(cnt).map(t => `${t} ${cnt[t]}건`).join(', ');
+
+        let msg = `[연차·반차 사용내역 업로드 확인]\n\n등록: ${toAdd.length}건 (직원 ${pendingMap.size}명)\n`;
+        if (cntText) msg += `  - ${cntText}\n`;
+        msg += `이미 같은 날짜가 있어 건너뜀: ${dupCount}건\n`;
+        if (dupList.length) msg += `  (예: ${dupList.join(', ')}${dupCount > dupList.length ? ' 등' : ''})\n`;
+        if (unknown.size) {
+            const un = Array.from(unknown.entries()).map(([n, c]) => `${n}(${c}건)`);
+            msg += `\n▶ 등록되지 않은 직원 (제외): ${un.slice(0, 8).join(', ')}${un.length > 8 ? ` 외 ${un.length - 8}명` : ''}\n`;
+        }
+        if (errors.length) msg += `\n▶ 오류\n` + errors.slice(0, 8).join('\n') + (errors.length > 8 ? `\n... 외 ${errors.length - 8}건` : '') + '\n';
+        if (warnings.length) msg += `\n▶ 참고\n` + Array.from(new Set(warnings)).slice(0, 3).join('\n') + '\n';
+
+        if (toAdd.length === 0) { alert(msg + '\n반영할 내역이 없습니다.'); return; }
+        if (!confirm(msg + '\n이대로 반영할까요?')) return;
+
+        let seq = Date.now();
+        toAdd.forEach(({ emp, item }) => {
+            if (!emp.history) emp.history = [];
+            emp.history.push({ id: seq++, ...item });
+        });
+
+        saveDataSilent();
+        renderDashboard();
+        if (typeof renderCalendar === 'function') renderCalendar();
+        alert(`반영 완료: ${toAdd.length}건 등록 (직원 ${pendingMap.size}명)`);
+    }
+
+    function importUsage(rows) {
+        rows = rows.filter(r => r.some(c => String(c).trim() !== ''));
+        if (rows.length < 2) { alert('데이터가 없습니다.'); return; }
+
+        const h0 = rows[0].map(h => normHeader(h));
+        const wideLabels = ['연차', '반차', '오전반차', '오후반차', '대체휴가', '대체반차', '경조휴가', '교육'];
+        if (h0.some(h => wideLabels.includes(h)) && findUsageColumns(rows[0]).start === undefined) {
+            importUsageWide(rows);
+            return;
+        }
+
+        const cols = findUsageColumns(rows[0]);
+        const missing = [];
+        if (cols.name === undefined) missing.push('이름');
+        if (cols.start === undefined) missing.push('시작일');
+        if (missing.length) {
+            alert('필수 열을 찾지 못했습니다: ' + missing.join(', ') + '\n첫 줄에 제목이 있는지 확인해 주세요.');
+            return;
+        }
+
+        const get = (r, key) => (cols[key] === undefined ? '' : r[cols[key]]);
+        const toAdd = [], errors = [], warnings = [];
+        let dupCount = 0;
+        const pending = new Set();
+
+        rows.slice(1).forEach((r, i) => {
+            const line = i + 2;
+            const name = String(get(r, 'name')).trim();
+            const birthRaw = get(r, 'birth');
+            const birth = String(birthRaw).trim() === '' ? '' : parseBirthCell(birthRaw);
+            const start = parseDateCell(get(r, 'start'));
+            let endRaw = get(r, 'end');
+            let end = String(endRaw).trim() === '' ? start : parseDateCell(endRaw);
+            let typeRaw = String(get(r, 'type')).replace(/\s/g, '');
+            let type = typeRaw === '' ? '연차' : (USAGE_TYPES.includes(typeRaw) ? typeRaw : USAGE_TYPE_ALIAS[typeRaw]);
+            const reason = String(get(r, 'reason')).trim();
+
+            const errs = [];
+            if (!name) errs.push('이름 없음');
+            if (birth === null) errs.push('생년월일 형식 오류');
+            if (!start) errs.push('시작일 형식 오류');
+            if (end === null || (end && start && end < start)) errs.push('종료일 형식 오류 또는 시작일보다 이전');
+            if (!type) errs.push(`구분 "${typeRaw}" 인식 불가`);
+            if (errs.length) { errors.push(`${line}행(${name || '이름없음'}): ${errs.join(', ')}`); return; }
+
+            if (typeRaw && !USAGE_TYPES.includes(typeRaw)) warnings.push(`${line}행(${name}): 구분 "${typeRaw}" → "${type}" 으로 처리`);
+
+            let cands = employees.filter(e => e.name === name);
+            if (birth) cands = cands.filter(e => String(e.birth || '').slice(0, 6) === birth.slice(0, 6));
+            if (cands.length === 0) { errors.push(`${line}행(${name}): 등록된 직원이 아님`); return; }
+            if (cands.length > 1) { errors.push(`${line}행(${name}): 동명이인 → 생년월일을 입력해 주세요`); return; }
+            const emp = cands[0];
+
+            let days;
+            if (type.includes('반차')) {
+                days = 0.5;
+                end = start;
+            } else {
+                const dRaw = parseFloat(get(r, 'days'));
+                days = dRaw > 0 ? dRaw : Math.round((new Date(end) - new Date(start)) / 86400000) + 1;
+            }
+
+            const key = `${emp.id}|${type}|${start}|${end}`;
+            const dup = pending.has(key) || (emp.history || []).some(h => h.type === type && h.start === start && h.end === end);
+            if (dup) { dupCount++; return; }
+            pending.add(key);
+
+            toAdd.push({ emp, item: { type, start, end, days, reason } });
+        });
+
+        let msg = `[연차 사용내역 업로드 확인]\n\n등록: ${toAdd.length}건\n중복으로 건너뜀: ${dupCount}건\n오류로 제외: ${errors.length}행\n`;
+        if (errors.length) msg += '\n▶ 오류\n' + errors.slice(0, 8).join('\n') + (errors.length > 8 ? `\n... 외 ${errors.length - 8}행` : '') + '\n';
+        if (warnings.length) msg += '\n▶ 참고\n' + warnings.slice(0, 4).join('\n') + (warnings.length > 4 ? `\n... 외 ${warnings.length - 4}건` : '') + '\n';
+
+        if (toAdd.length === 0) { alert(msg + '\n반영할 내역이 없습니다.'); return; }
+        if (!confirm(msg + '\n이대로 반영할까요?')) return;
+
+        let seq = Date.now();
+        toAdd.forEach(({ emp, item }) => {
+            if (!emp.history) emp.history = [];
+            emp.history.push({ id: seq++, ...item });
+        });
+
+        saveDataSilent();
+        renderDashboard();
+        if (typeof renderCalendar === 'function') renderCalendar();
+        alert(`반영 완료: ${toAdd.length}건 등록`);
+    }
+
+    async function saveData() { 
+        saveDataSilent();
+        if (firestoreEnabled) {
+            const ok = await syncToFirestore();
+            alert(ok
+                ? '데이터가 브라우저와 Google Firestore에 저장되었습니다.'
+                : '브라우저에는 저장되었습니다. Firestore 저장에 실패했습니다.');
+        } else {
+            alert('데이터가 브라우저 저장소에 안전하게 저장되었습니다.\n\n※ Firebase 설정을 입력하면 Google Firestore에도 저장됩니다.');
+        }
+    }
+
+    function nowStamp() {
+        const d = new Date();
+        return d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + '_' + pad2(d.getHours()) + pad2(d.getMinutes());
+    }
+
+    // 전체 데이터를 제목이 들어간 JSON 파일로 저장
+    function exportBackup() {
+        try {
+            const now = new Date();
+            const title = '통합 연차 관리 및 퇴사 정산 시스템 백업';
+            const payload = {
+                title: title,
+                exportedAt: now.toISOString(),
+                systemBaseYear: SYSTEM_BASE_YEAR,
+                employeeCount: employees.length,
+                employees: employees,
+                deletedEmployees: deletedEmployees
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = '연차관리_백업_' + nowStamp() + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        } catch (err) {
+            console.error(err);
+            alert('백업 파일을 만드는 중 오류가 발생했습니다.\n' + err.message);
+        }
+    }
+    function restoreBackup() { alert('백업 복원 기능을 실행합니다.'); }
+    // PDF 저장: 브라우저가 문서 제목을 파일 이름으로 쓰므로, 인쇄하는 동안 제목을 바꿔 둠
+    function savePdf() {
+        const names = {
+            'page-apply': '연차신청',
+            'page-personal': '개인사용현황',
+            'page-dashboard': '전체대시보드',
+            'page-calendar': '연차캘린더'
+        };
+        const pg = document.querySelector('.page.active');
+        const label = (pg && names[pg.id]) || '현황';
+        const oldTitle = document.title;
+        document.title = '연차관리_' + label + '_' + SYSTEM_BASE_YEAR + '년_' + nowStamp();
+        const restore = () => { document.title = oldTitle; window.removeEventListener('afterprint', restore); };
+        window.addEventListener('afterprint', restore);
+        window.print();
+    }
+
+    function requestAdminAccess(targetTab = 'dashboard') {
+        targetTabAfterAuth = targetTab;
+        if (isAdminAuthenticated) {
+            switchTab(targetTabAfterAuth);
+        } else {
+            document.getElementById('adminModal').classList.add('active');
+            document.getElementById('adminPassword').value = '';
+            document.getElementById('adminPassword').focus();
+        }
+    }
+
+    function closeAdminModal() {
+        document.getElementById('adminModal').classList.remove('active');
+    }
+
+    function checkAdminPassword() {
+        const inputPw = document.getElementById('adminPassword').value;
+        if (inputPw === '1234') { 
+            isAdminAuthenticated = true;
+            closeAdminModal();
+            switchTab(targetTabAfterAuth);
+        } else {
+            alert('비밀번호가 일치하지 않습니다.');
+        }
+    }
+
+    function updateEmpVal(index, key, val) {
+        if (key === 'prevYearUsed' || key === 'settlementLeave') {
+            employees[index][key] = parseFloat(val) || 0;
+        } else {
+            employees[index][key] = val;
+        }
+        saveDataSilent();
+        renderDashboard();
+    }
+
+    let deletedEmployees = [];
+
+    function deleteEmp(index) {
+        const emp = employees[index];
+        if (!emp) return;
+        const status = emp.retireDate ? '퇴사자' : '재직 중인 직원';
+        const warn = emp.retireDate ? '' : '\n※ 재직 중인 직원입니다. 퇴사 처리가 아니라 목록에서만 삭제됩니다.';
+        if (!confirm(`[${emp.dept}] ${emp.name} ${emp.position} (${status})님을 삭제함으로 이동하시겠습니까?${warn}\n\n삭제함에서 복원하거나 영구 삭제할 수 있습니다.`)) return;
+
+        const now = new Date();
+        emp.deletedAt = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+        deletedEmployees.push(emp);
+        employees.splice(index, 1);
+
+        if (authenticatedApplyEmp && authenticatedApplyEmp.id === emp.id) resetApplyForm();
+        if (authenticatedPersonalEmp && authenticatedPersonalEmp.id === emp.id) resetPersonalView();
+
+        saveDataSilent();
+        populateEmpSelectOptions(document.getElementById('accessTeamSelect').value);
+        renderDashboard();
+    }
+
+    function updateEmpTrashCount() {
+        const el = document.getElementById('empTrashCount');
+        if (el) el.innerText = deletedEmployees.length;
+    }
+
+    function openEmpTrashModal() {
+        renderEmpTrashTable();
+        document.getElementById('empTrashModal').classList.add('active');
+    }
+
+    function closeEmpTrashModal() {
+        document.getElementById('empTrashModal').classList.remove('active');
+        renderDashboard();
+    }
+
+    function renderEmpTrashTable() {
+        const tbody = document.getElementById('empTrashTableBody');
+        document.getElementById('selectAllEmpTrash').checked = false;
+        tbody.innerHTML = '';
+
+        if (deletedEmployees.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="color:#94a3b8; padding:25px;">삭제함이 비어 있습니다.</td></tr>`;
+            return;
+        }
+
+        deletedEmployees.slice().reverse().forEach(emp => {
+            const tr = document.createElement('tr');
+            const status = emp.retireDate
+                ? `<span class="badge badge-retired">퇴사</span>`
+                : `<span class="badge badge-active">재직</span>`;
+            tr.innerHTML = `
+                <td><input type="checkbox" class="emp-trash-check" value="${emp.id}"></td>
+                <td>${emp.deletedAt || '-'}</td>
+                <td>${emp.dept}</td>
+                <td><strong>${emp.name}</strong></td>
+                <td>${emp.position}</td>
+                <td>${emp.joinDate}</td>
+                <td>${emp.retireDate || '-'}</td>
+                <td>${status}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function toggleSelectAllEmpTrash(master) {
+        document.querySelectorAll('.emp-trash-check').forEach(cb => cb.checked = master.checked);
+    }
+
+    function getSelectedEmpTrashIds() {
+        return Array.from(document.querySelectorAll('.emp-trash-check:checked')).map(cb => parseInt(cb.value));
+    }
+
+    function restoreSelectedEmployees() {
+        const ids = getSelectedEmpTrashIds();
+        if (ids.length === 0) { alert('복원할 직원을 선택해 주세요.'); return; }
+
+        let restored = 0;
+        const skipped = [];
+        ids.forEach(id => {
+            const idx = deletedEmployees.findIndex(e => e.id === id);
+            if (idx < 0) return;
+            const emp = deletedEmployees[idx];
+            const dup = employees.find(e => e.id === emp.id ||
+                (e.name === emp.name && String(e.birth || '').slice(0, 6) === String(emp.birth || '').slice(0, 6)));
+            if (dup) { skipped.push(emp.name); return; }
+            delete emp.deletedAt;
+            if (!Number.isInteger(emp.no) || employees.some(e => e.no === emp.no)) emp.no = lowestFreeNo();
+            employees.push(emp);
+            deletedEmployees.splice(idx, 1);
+            restored++;
+        });
+
+        saveDataSilent();
+        populateEmpSelectOptions(document.getElementById('accessTeamSelect').value);
+        renderDashboard();
+        renderEmpTrashTable();
+
+        let msg = `${restored}명을 복원했습니다.`;
+        if (skipped.length) msg += `\n이름과 생년월일이 같은 직원이 이미 있어 복원하지 않았습니다: ${skipped.join(', ')}`;
+        alert(msg);
+    }
+
+    function permanentlyDeleteSelectedEmployees() {
+        const ids = getSelectedEmpTrashIds();
+        if (ids.length === 0) { alert('영구 삭제할 직원을 선택해 주세요.'); return; }
+        if (!confirm(`선택한 ${ids.length}명을 영구 삭제하시겠습니까?\n연차 사용 내역과 보관된 취소 내역이 모두 사라지며 복구할 수 없습니다.`)) return;
+
+        deletedEmployees = deletedEmployees.filter(e => !ids.includes(e.id));
+        saveDataSilent();
+        updateEmpTrashCount();
+        renderEmpTrashTable();
+        renderDashboard();
+    }
+
+    function handleAddEmp(e) {
+        e.preventDefault();
+
+        let no = normalizeEmployeeNo(document.getElementById('newNo').value);
+        const nameIn = document.getElementById('newName').value.trim();
+        const birthIn = document.getElementById('newBirth').value.trim();
+
+        if (!nameIn || !birthIn) {
+            alert('이름과 생년월일은 필수입니다.');
+            return;
+        }
+
+        if (no === null) {
+            no = lowestFreeNo();
+        } else {
+            const duplicate = employees.some(e => Number(e.no) === no);
+            if (duplicate) {
+                const autoNo = ensureUniqueEmployeeNo(no);
+                alert(`${no}번은 이미 사용 중이라 ${autoNo}번으로 자동 등록합니다.`);
+                no = autoNo;
+            }
+        }
+
+        const sameEmp = employees.find(x => x.name === nameIn && String(x.birth || '').slice(0, 6) === birthIn.slice(0, 6));
+        if (sameEmp) {
+            alert(`이름과 생년월일이 같은 직원(${sameEmp.no}번 ${sameEmp.name})이 이미 등록되어 있습니다.`);
+            return;
+        }
+
+        const newEmp = {
+            id: Date.now(),
+            no,
+            dept: document.getElementById('newDept').value,
+            name: nameIn,
+            position: document.getElementById('newPosition').value,
+            birth: birthIn,
+            joinDate: document.getElementById('newJoinDate').value,
+            retireDate: "",
+            prevYearUsed: 0,
+            settlementLeave: 0,
+            history: [],
+            trashHistory: []
+        };
+
+        employees.push(newEmp);
+        saveDataSilent();
+        renderDashboard();
+        alert(`${newEmp.name} 사원이 등록되었습니다. (번호: ${no}번)`);
+        document.getElementById('newName').value = '';
+        document.getElementById('newBirth').value = '';
+        delete document.getElementById('newNo').dataset.dirty;
+        refreshNewEmpNo();
+    }
+
+    function showPage(pageId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+        if (pageId === 'page-calendar' && calendarInstance) {
+            setTimeout(() => { calendarInstance.updateSize(); }, 200);
+        }
+    }
+
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        const adminYearContainer = document.getElementById('adminYearContainer');
+
+        if (tabName === 'apply') {
+            document.getElementById('tab1').classList.add('active');
+            adminYearContainer.classList.remove('active');
+            showPage('page-apply');
+        } else if (tabName === 'personal') {
+            document.getElementById('tab2').classList.add('active');
+            adminYearContainer.classList.remove('active');
+            showPage('page-personal');
+        } else if (tabName === 'dashboard') {
+            document.getElementById('tab3').classList.add('active');
+            adminYearContainer.classList.add('active');
+            showPage('page-dashboard');
+        } else if (tabName === 'calendar') {
+            document.getElementById('tab4').classList.add('active');
+            adminYearContainer.classList.add('active');
+            showPage('page-calendar');
+            if (calendarInstance) {
+                calendarInstance.updateSize();
+            }
+        }
+    }
+
+    (function() {
+        const PAGE_W = Math.floor(285 / 25.4 * 96);
+        const PAGE_H = Math.floor(198 / 25.4 * 96);
+        const SAFETY = 50;
+
+        function isCalendarPrint() {
+            const pg = document.getElementById('page-calendar');
+            return pg && pg.classList.contains('active') && calendarInstance;
+        }
+
+        function frames(el) {
+            return Array.from(el.querySelectorAll('.fc-daygrid-day-frame'));
+        }
+
+        function fitCalendarToPage() {
+            const el = document.getElementById('calendar');
+            if (!el) return;
+            const availH = PAGE_H - SAFETY;
+            el.style.zoom = '';
+            el.style.width = PAGE_W + 'px';
+            calendarInstance.setOption('height', 'auto');
+            calendarInstance.updateSize();
+
+            const fr = frames(el);
+            const weeks = Math.round(fr.length / 7);
+            const extra = availH - el.offsetHeight;
+            if (weeks > 0 && extra > 0) {
+                const add = extra / weeks;
+                fr.forEach(f => f.style.setProperty('min-height', (f.offsetHeight + add) + 'px', 'important'));
+            }
+
+            const h = el.offsetHeight;
+            if (h > availH) {
+                const z = Math.max(0.5, availH / h);
+                el.style.zoom = z;
+                el.style.width = Math.floor(PAGE_W / z) + 'px';
+            }
+        }
+
+        function resetCalendarPrint() {
+            const el = document.getElementById('calendar');
+            if (!el) return;
+            el.style.zoom = '';
+            el.style.width = '';
+            frames(el).forEach(f => f.style.removeProperty('min-height'));
+            if (calendarInstance) {
+                calendarInstance.setOption('height', 'auto');
+                calendarInstance.updateSize();
+            }
+        }
+
+        function escHtml(t) {
+            return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+        }
+
+        // 월간 보기를 인쇄용 표(일~토 7칸 균등, 일정은 칸 안에 나열)로 만들어 한 장에 맞춤
+        function buildPrintCalendar() {
+            const host = document.getElementById('printCalendar');
+            if (!host || !calendarInstance || calendarInstance.view.type !== 'dayGridMonth') return false;
+
+            const view = calendarInstance.view;
+            const fmt = d => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+            const start = new Date(view.activeStart.getFullYear(), view.activeStart.getMonth(), view.activeStart.getDate());
+            const endD = new Date(view.activeEnd.getFullYear(), view.activeEnd.getMonth(), view.activeEnd.getDate());
+            const curMonth = view.currentStart.getMonth();
+            const todayKey = fmt(new Date());
+
+            const byDay = {};
+            calendarInstance.getEvents().forEach(ev => {
+                if (!ev.start) return;
+                const s0 = new Date(ev.start.getFullYear(), ev.start.getMonth(), ev.start.getDate());
+                let e0 = ev.end ? new Date(ev.end.getFullYear(), ev.end.getMonth(), ev.end.getDate()) : new Date(s0.getTime() + 86400000);
+                if (e0 <= s0) e0 = new Date(s0.getTime() + 86400000);
+                const span = Math.round((e0 - s0) / 86400000);
+                let guard = 0;
+                for (let d = new Date(s0); d < e0 && guard < 400; d.setDate(d.getDate() + 1), guard++) {
+                    const k = fmt(d);
+                    (byDay[k] = byDay[k] || []).push({ title: ev.title, color: ev.backgroundColor || '#3b82f6', span });
+                }
+            });
+            Object.keys(byDay).forEach(k => byDay[k].sort((a, b) => (b.span - a.span) || String(a.title).localeCompare(String(b.title), 'ko')));
+
+            const weeks = Math.max(1, Math.round((endD - start) / 86400000 / 7));
+            const dow = ['일', '월', '화', '수', '목', '금', '토'];
+            let html = '<div class="pc-title">' + escHtml(view.title) + '</div><table class="pc-table"><thead><tr>' +
+                dow.map(n => '<th>' + n + '</th>').join('') + '</tr></thead><tbody>';
+            const cur = new Date(start);
+            for (let w = 0; w < weeks; w++) {
+                html += '<tr>';
+                for (let i = 0; i < 7; i++) {
+                    const k = fmt(cur);
+                    const cls = (cur.getMonth() !== curMonth ? ' pc-other' : '') + (k === todayKey ? ' pc-today' : '');
+                    html += '<td class="' + cls.trim() + '"><div class="pc-num">' + cur.getDate() + '일</div>' +
+                        (byDay[k] || []).map(e => '<span class="pc-ev" style="background:' + escHtml(e.color) + '">' + escHtml(e.title) + '</span>').join('') +
+                        '</td>';
+                    cur.setDate(cur.getDate() + 1);
+                }
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+            host.innerHTML = html;
+
+            // 한 장에 들어가도록 글자 크기를 단계적으로 줄이며 측정
+            const availH = Math.floor(196 / 25.4 * 96) - 52;
+            host.style.cssText = 'display:block;position:absolute;left:-99999px;top:0;width:' + PAGE_W + 'px;';
+            for (let fs = 11; fs >= 5; fs -= 0.5) {
+                host.style.setProperty('--pc-fs', fs + 'px');
+                if (host.offsetHeight <= availH) break;
+            }
+            const fsFinal = host.style.getPropertyValue('--pc-fs');
+            host.style.cssText = '';
+            host.style.setProperty('--pc-fs', fsFinal);
+
+            document.body.classList.add('cal-print-on');
+            return true;
+        }
+
+        function resetPrintCalendar() {
+            document.body.classList.remove('cal-print-on');
+            const host = document.getElementById('printCalendar');
+            if (host) { host.innerHTML = ''; host.style.cssText = ''; }
+        }
+
+        window.addEventListener('beforeprint', function() {
+            if (!isCalendarPrint()) return;
+            if (!buildPrintCalendar()) fitCalendarToPage();
+        });
+        window.addEventListener('afterprint', function() {
+            resetPrintCalendar();
+            resetCalendarPrint();
+        });
+    })();
+
+    window.addEventListener('DOMContentLoaded', async () => {
+        const requestedTeam = new URLSearchParams(window.location.search).get('team');
+        const accessTeamSelect = document.getElementById('accessTeamSelect');
+        if (requestedTeam && Array.from(accessTeamSelect.options).some(option => option.value === requestedTeam)) {
+            accessTeamSelect.value = requestedTeam;
+        }
+
+        const savedData = localStorage.getItem('annual_leave_employees');
+        if (savedData) {
+            try { employees = JSON.parse(savedData); } catch (e) { console.error("데이터 로드 실패", e); }
+        }
+        const savedDeleted = localStorage.getItem('annual_leave_deleted_employees');
+        if (savedDeleted) {
+            try { deletedEmployees = JSON.parse(savedDeleted) || []; } catch (e) { console.error("삭제함 로드 실패", e); }
+        }
+
+        initFirestore();
+        if (firestoreEnabled) {
+            await loadDataFromFirestore();
+        }
+
+        ensureEmployeeNumbers();
+        saveDataSilent();
+        handleTeamChange();
+        renderDashboard();
+    });
+</script>
+
+</body>
+</html>

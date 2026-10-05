@@ -442,7 +442,9 @@
         #loginGate button:hover { background: #2563eb; }
         #loginGate button:disabled { background: #93c5fd; cursor: default; }
         #loginGate .lg-msg { min-height: 18px; margin-top: 12px; font-size: 12.5px; color: #dc2626; line-height: 1.5; }
-        @media print { #loginGate { display: none !important; } }
+        @media print { #loginGate, #lockScreen { display: none !important; } }
+        #lockScreen { position: fixed; inset: 0; z-index: 100000; background: #0f172a; color: #fff; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; font-size: 20px; line-height: 1.7; padding: 20px; }
+        #lockScreen small { font-size: 14px; color: #94a3b8; }
     </style>
 
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
@@ -452,6 +454,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body class="auth-locked">
+
+<div id="lockScreen">🔧 시스템 점검 중입니다.<br><small>관리자가 잠금을 해제하면 자동으로 다시 사용할 수 있습니다.</small></div>
 
 <div id="loginGate">
     <div class="lg-card">
@@ -486,7 +490,7 @@
         }, 50);
     }
 
-    try { if (sessionStorage.getItem(SESSION_KEY) === '1') { unlock(); return; } } catch (e) {}
+    try { if (sessionStorage.getItem(SESSION_KEY) === '1') unlock(); } catch (e) {}
 
     async function fetchSettings() {
         const ctrl = new AbortController();
@@ -540,6 +544,57 @@
     btn.addEventListener('click', submit);
     pw.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
     setTimeout(() => pw.focus(), 50);
+
+    // ===== 실시간 반영: 접속한 뒤에도 잠금(is_locked)과 비밀번호 변경을 바로 적용 =====
+    const lockScreen = document.getElementById('lockScreen');
+    let currentPassword = null;      // 서버의 현재 비밀번호 (처음 받기 전에는 null)
+
+    function isAuthenticated() {
+        try { return sessionStorage.getItem(SESSION_KEY) === '1'; } catch (e) { return false; }
+    }
+    function applyLock(value) {
+        const locked = (value === true || String(value).toLowerCase() === 'true');
+        lockScreen.style.display = locked ? 'flex' : 'none';
+    }
+    function applyPassword(value) {
+        const next = (value == null) ? '' : String(value).trim();
+        const changed = (currentPassword !== null && next !== currentPassword);
+        currentPassword = next;
+        if (changed && isAuthenticated()) {
+            // 비밀번호가 바뀌면 열려 있는 화면도 다시 로그인하게 함
+            try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
+            document.body.classList.add('auth-locked');
+            gate.style.display = 'flex';
+            pw.value = '';
+            msg.textContent = '관리자가 비밀번호를 변경했습니다. 다시 접속해 주세요.';
+            pw.focus();
+        }
+    }
+
+    // Firebase 실시간 스트리밍(EventSource). 연결이 안 되면 10초마다 확인하는 방식으로 대체
+    function watch(path, onValue) {
+        const url = RTDB_URL + encodeURIComponent(path) + '.json';
+        let timer = null;
+        function poll() {
+            fetch(url + '?_=' + Date.now(), { cache: 'no-store' })
+                .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                .then(onValue)
+                .catch(e => console.warn('[실시간] 확인 실패:', path, e));
+        }
+        function startPolling() { if (!timer) { poll(); timer = setInterval(poll, 10000); } }
+        function stopPolling() { if (timer) { clearInterval(timer); timer = null; } }
+        if (!window.EventSource) { startPolling(); return; }
+        const es = new EventSource(url);
+        const handle = e => {
+            try { const m = JSON.parse(e.data); if (m && m.path === '/') onValue(m.data); } catch (err) {}
+        };
+        es.addEventListener('put', e => { stopPolling(); handle(e); });
+        es.addEventListener('patch', handle);
+        es.onerror = () => { if (es.readyState === 2) startPolling(); };
+    }
+
+    watch('is_locked', applyLock);
+    watch('system password', applyPassword);
 })();
 </script>
 

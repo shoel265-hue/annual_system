@@ -1210,8 +1210,22 @@
         return document.getElementById('accessTeamSelect').value === "전체 (총괄 관리자)";
     }
 
+    // 통합포털에서 팀 계정으로 접속한 경우 값이 채워짐 (최고관리자 접속이거나 포털 없이 열면 빈 값)
+    let portalTeamLogin = '';
+    let lastAccessTeam = '';
+
     function handleTeamChange() {
-        const selectedTeam = document.getElementById('accessTeamSelect').value;
+        const accessSelect = document.getElementById('accessTeamSelect');
+        const selectedTeam = accessSelect.value;
+
+        // 팀 계정으로 접속한 경우 '전체 (총괄 관리자)' 선택을 막고 이전 팀으로 되돌림
+        if (portalTeamLogin && selectedTeam === "전체 (총괄 관리자)") {
+            alert("⚠️ '전체 (총괄 관리자)'는 통합포털에서 최고관리자로 로그인한 경우에만 사용할 수 있습니다.");
+            accessSelect.value = lastAccessTeam || portalTeamLogin;
+            return;
+        }
+        lastAccessTeam = selectedTeam;
+
         isAdminAuthenticated = false;
 
         const activePage = document.querySelector('.page.active');
@@ -3597,6 +3611,7 @@
     window.addEventListener('DOMContentLoaded', async () => {
         const requestedTeam = new URLSearchParams(window.location.search).get('team');
         const accessTeamSelect = document.getElementById('accessTeamSelect');
+        if (requestedTeam && requestedTeam !== '전체 (총괄 관리자)') portalTeamLogin = requestedTeam;
         if (requestedTeam && Array.from(accessTeamSelect.options).some(option => option.value === requestedTeam)) {
             accessTeamSelect.value = requestedTeam;
         }

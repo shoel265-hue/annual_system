@@ -425,6 +425,7 @@
             body.rpt-printing .rpt-sheet textarea { border: none !important; }
             body.rpt-printing .rpt-sheet input { border: none !important; border-bottom: none !important; }
             body.rpt-printing .rpt-foot { border-top: none !important; }
+            body.rpt-printing #rptLeader::placeholder { color: transparent !important; -webkit-text-fill-color: transparent !important; }
         }
 
         /* ===== 시스템 접속 로그인 화면 ===== */
@@ -2424,7 +2425,10 @@
     }
 
     function findTeamLeaderName(emp) {
-        const leader = employees.find(e => e.id !== emp.id && e.dept === emp.dept && !e.retireDate && String(e.position || '').includes('팀장'));
+        const pos = String(emp.position || '');
+        if (pos.includes('소장')) return '';          // 관리소장 신청: 팀장 이름 없음
+        if (pos.includes('팀장')) return emp.name;     // 팀장 본인 신청: 본인 이름
+        const leader = employees.find(e => e.dept === emp.dept && !e.retireDate && String(e.position || '').includes('팀장'));
         return leader ? leader.name : '';
     }
 

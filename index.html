@@ -2248,7 +2248,9 @@
                             dept: emp.dept,
                             name: emp.name,
                             reason: h.reason,
-                            type: h.type
+                            type: h.type,
+                            startStr: h.start,
+                            endStr: h.end || h.start
                         }
                     });
                 });
@@ -2274,8 +2276,10 @@
             events: events,
             eventClick: function(info) {
                 const p = info.event.extendedProps;
-                let originalEndStr = info.event.end ? new Date(new Date(info.event.end).getTime() - 86400000).toISOString().split('T')[0] : info.event.startStr;
-                alert(`📌 연차 일정 상세\n\n• 직원: ${p.name} (${p.dept})\n• 구분: ${p.type}\n• 기간: ${info.event.startStr} ~ ${originalEndStr}\n• 사유: ${p.reason}`);
+                // 저장된 시작·종료일을 그대로 표시 (달력의 종료일은 하루 뒤로 잡혀 있어 시간대에 따라 하루씩 어긋나므로 쓰지 않음)
+                const startStr = p.startStr || info.event.startStr;
+                const originalEndStr = p.endStr || startStr;
+                alert(`📌 연차 일정 상세\n\n• 직원: ${p.name} (${p.dept})\n• 구분: ${p.type}\n• 기간: ${startStr} ~ ${originalEndStr}\n• 사유: ${p.reason || ''}`);
             }
         });
 

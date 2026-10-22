@@ -1008,6 +1008,30 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="backupViewModal">
+    <div class="modal-box large" style="width:1250px; max-height:92vh; overflow:auto;">
+        <input type="file" id="backupFileInput" accept=".json,application/json" style="display:none;" onchange="handleBackupFile(this)">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:2px solid #e2e8f0; padding-bottom:10px;">
+            <h3 style="color:#1e293b;">📂 백업 이력 조회 <span style="font-size:12px; color:#dc2626;">(읽기 전용 · 현재 데이터는 바뀌지 않습니다)</span></h3>
+            <button class="btn btn-secondary" onclick="closeBackupView()" style="padding:4px 10px;">✕ 닫기</button>
+        </div>
+        <div id="bvInfo" style="font-size:13px; color:#475569; margin-bottom:10px;"></div>
+        <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap; font-size:13px;">
+            <label>조회 연도 <select id="bvYear" onchange="renderBackupView()"></select></label>
+            <label>팀 <select id="bvTeam" onchange="renderBackupView()"></select></label>
+            <label>이름 <input type="text" id="bvName" placeholder="이름 검색" oninput="renderBackupView()" style="padding:4px 6px;"></label>
+            <button class="btn btn-secondary" onclick="restoreBackup()" style="padding:4px 10px;">다른 백업 파일 열기</button>
+        </div>
+        <div id="bvNote" style="font-size:12px; margin-bottom:8px; color:#475569;"></div>
+        <div class="table-container" style="max-height:62vh; overflow:auto;">
+            <table class="data-table" style="font-size:12px;">
+                <thead><tr><th>번호</th><th>팀</th><th>이름</th><th>직급</th><th>입사일</th><th>구분</th><th>발생</th><th>정산</th><th>전년 초과</th><th>이전년도 사용</th><th>연차</th><th>반차</th><th>대체</th><th>경조</th><th>교육</th><th>사용 합계</th><th>잔여</th><th>상세</th></tr></thead>
+                <tbody id="bvBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="birthAuthModal">
     <div class="modal-box">
         <h3 style="margin-bottom:8px; color:#1e293b;">🔒 본인 인증 (생년월일)</h3>
@@ -3473,6 +3497,23 @@
     }
 
     // 전체 데이터를 제목이 들어간 JSON 파일로 저장
+    // 백업 시점의 계산 결과(발생·사용·잔여 등)를 적용년도 기준으로 함께 보관
+    function buildLeaveSnapshot() {
+        const results = {};
+        employees.forEach(emp => {
+            try {
+                const r = calculateLeaveDetails(emp);
+                results[String(emp.id)] = {
+                    category: r.category, serviceYears: r.serviceYears, generatedLeave: r.generatedLeave,
+                    settlementLeave: r.settlementLeave, carryDeficit: r.carryDeficit || 0, effectivePrevUsed: r.effectivePrevUsed,
+                    usedAnnual: r.usedAnnual, usedHalf: r.usedHalf, substitute: r.substitute, congrat: r.congrat,
+                    education: r.education, totalUsed: r.totalUsed, remaining: r.remaining, isRetired: !!r.isRetired
+                };
+            } catch (e) { console.warn('[백업] 계산 결과 저장 실패:', emp && emp.name, e); }
+        });
+        return { year: SYSTEM_BASE_YEAR, savedAt: new Date().toISOString(), results };
+    }
+
     function exportBackup() {
         try {
             const now = new Date();
@@ -3483,7 +3524,8 @@
                 systemBaseYear: SYSTEM_BASE_YEAR,
                 employeeCount: employees.length,
                 employees: employees,
-                deletedEmployees: deletedEmployees
+                deletedEmployees: deletedEmployees,
+                leaveSnapshot: buildLeaveSnapshot()
             };
             const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
             const a = document.createElement('a');
@@ -3498,7 +3540,109 @@
             alert('백업 파일을 만드는 중 오류가 발생했습니다.\n' + err.message);
         }
     }
-    function restoreBackup() { alert('백업 복원 기능을 실행합니다.'); }
+    // ===== 백업(JSON) 이력 조회: 파일을 읽기만 하고 현재 데이터는 건드리지 않음 =====
+    let backupView = null;
+    let bvRows = [];
+
+    function restoreBackup() { document.getElementById('backupFileInput').click(); }
+
+    function handleBackupFile(input) {
+        const file = input.files && input.files[0];
+        input.value = '';
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            let data;
+            try { data = JSON.parse(reader.result); } catch (e) { alert('JSON 파일을 읽을 수 없습니다.'); return; }
+            const list = Array.isArray(data) ? data : (data && data.employees);
+            if (!Array.isArray(list)) { alert('연차 백업 파일 형식이 아닙니다.'); return; }
+            const exported = data.exportedAt ? new Date(data.exportedAt) : null;
+            const by = Number(data.systemBaseYear) || (exported && exported.getFullYear()) || SYSTEM_BASE_YEAR;
+            const emps = JSON.parse(JSON.stringify(list));
+            emps.forEach(e => {   // 예전 백업의 단일 정산 값은 백업 당시 적용년도 값으로 간주
+                if (!e.settlementByYear) {
+                    e.settlementByYear = {};
+                    const v = parseFloat(e.settlementLeave) || 0;
+                    if (v) e.settlementByYear[by] = v;
+                }
+            });
+            backupView = {
+                fileName: file.name, title: data.title || '', year: by, employees: emps,
+                deleted: Array.isArray(data.deletedEmployees) ? data.deletedEmployees.length : 0,
+                snapshot: (data.leaveSnapshot && data.leaveSnapshot.results) ? data.leaveSnapshot : null,
+                exportedText: exported && !isNaN(exported) ? exported.toLocaleString('ko-KR') : '(기록 없음)'
+            };
+            openBackupView();
+        };
+        reader.readAsText(file, 'utf-8');
+    }
+
+    function openBackupView() {
+        const b = backupView;
+        document.getElementById('bvInfo').innerHTML =
+            `파일: <b>${b.fileName}</b> · 백업 시각: <b>${b.exportedText}</b> · 백업 당시 적용년도: <b>${b.year}년</b> · 직원 ${b.employees.length}명` + (b.deleted ? ` (삭제함 ${b.deleted}명)` : '');
+        const ys = [];
+        for (let y = b.year; y >= b.year - 4; y--) ys.push(y);
+        document.getElementById('bvYear').innerHTML = ys.map(y => `<option value="${y}">${y}년</option>`).join('');
+        document.getElementById('bvTeam').innerHTML = '<option value="">전체 팀</option>' + DEPARTMENT_LIST.map(d => `<option value="${d}">${d}</option>`).join('');
+        document.getElementById('bvName').value = '';
+        document.getElementById('backupViewModal').classList.add('active');
+        renderBackupView();
+    }
+
+    function closeBackupView() {
+        document.getElementById('backupViewModal').classList.remove('active');
+        backupView = null; bvRows = [];
+    }
+
+    // 백업 데이터를 복사본으로만 계산 (적용년도를 잠시 바꿨다가 반드시 되돌림)
+    function buildBackupRows(emps, Y, team, q, snap) {
+        const saved = SYSTEM_BASE_YEAR, rows = [];
+        try {
+            SYSTEM_BASE_YEAR = Y;
+            emps.forEach(emp => {
+                if (team && emp.dept !== team) return;
+                if (q && !String(emp.name || '').includes(q)) return;
+                if (new Date(emp.joinDate).getFullYear() > Y) return;
+                if (emp.retireDate && new Date(emp.retireDate).getFullYear() < Y) return;
+                const stored = (snap && snap.year === Y) ? snap.results[String(emp.id)] : null;
+                rows.push(stored ? { emp, res: stored, fromSnapshot: true } : { emp, res: calculateLeaveDetails(emp), fromSnapshot: false });
+            });
+        } finally {
+            SYSTEM_BASE_YEAR = saved;
+        }
+        rows.sort((a, b) => (Number(a.emp.no) || 9999) - (Number(b.emp.no) || 9999));
+        return rows;
+    }
+
+    function renderBackupView() {
+        if (!backupView) return;
+        const Y = parseInt(document.getElementById('bvYear').value, 10);
+        const team = document.getElementById('bvTeam').value;
+        const q = document.getElementById('bvName').value.trim();
+        bvRows = buildBackupRows(backupView.employees, Y, team, q, backupView.snapshot);
+        const fromSaved = bvRows.length && bvRows.every(r => r.fromSnapshot);
+        document.getElementById('bvNote').innerHTML = fromSaved
+            ? '✅ 백업할 때 저장해 둔 계산 결과를 그대로 보여 주고 있습니다. (당시 화면과 같은 숫자)'
+            : '⚠️ 이 연도의 숫자는 신청 내역으로 <b>지금 규칙에 따라 다시 계산</b>한 값입니다. 계산 결과가 저장되지 않은 예전 백업이거나, 백업 당시 적용년도가 아닌 연도입니다.';
+        const body = document.getElementById('bvBody');
+        if (!bvRows.length) { body.innerHTML = '<tr><td colspan="18" style="color:#94a3b8;">조회 결과가 없습니다.</td></tr>'; return; }
+        body.innerHTML = bvRows.map(({ emp, res }, i) => {
+            const hist = (emp.history || []).filter(h => new Date(h.start).getFullYear() === Y).sort((a, b) => String(a.start).localeCompare(String(b.start)));
+            const detail = hist.length
+                ? hist.map(h => `${h.start}${h.end && h.end !== h.start ? ' ~ ' + h.end : ''} · ${h.type} ${h.days}일${h.reason ? ' · ' + h.reason : ''}`).join('<br>')
+                : '해당 연도 사용 내역이 없습니다.';
+            const rem = res.remaining < 0 ? `<span class="text-red">${res.remaining} (초과)</span>` : res.remaining;
+            return `<tr>
+                <td>${emp.no ?? ''}</td><td>${emp.dept ?? ''}</td><td class="text-bold">${emp.name ?? ''}${emp.retireDate ? ' <small style="color:#dc2626;">(퇴사 ' + emp.retireDate + ')</small>' : ''}</td><td>${emp.position ?? ''}</td><td>${emp.joinDate ?? ''}</td>
+                <td>${res.category}</td><td class="text-bold">${res.generatedLeave}</td><td>${res.settlementLeave}</td><td>${res.carryDeficit ? '-' + res.carryDeficit : '-'}</td><td>${res.effectivePrevUsed}</td>
+                <td>${res.usedAnnual}</td><td>${res.usedHalf}</td><td>${res.substitute}</td><td>${res.congrat}</td><td>${res.education}</td><td class="text-red">${res.totalUsed}</td><td class="text-bold">${rem}</td>
+                <td><button type="button" class="action-btn" style="padding:2px 8px; font-size:11px;" onclick="var r=document.getElementById('bvDetail${i}'); r.style.display = r.style.display==='none' ? '' : 'none';">보기</button></td>
+            </tr>
+            <tr id="bvDetail${i}" style="display:none; background:#f8fafc;"><td colspan="18" style="text-align:left; font-size:12px; line-height:1.7;">${detail}</td></tr>`;
+        }).join('');
+    }
+
     // PDF 저장: 브라우저가 문서 제목을 파일 이름으로 쓰므로, 인쇄하는 동안 제목을 바꿔 둠
     function savePdf() {
         const names = {

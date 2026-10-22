@@ -452,8 +452,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
+<style>@media print { #cloudBanner { display: none !important; } }</style>
 </head>
 <body class="auth-locked">
+<div id="cloudBanner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:99999; padding:8px 14px; font-size:13px; font-weight:600; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,.25);"></div>
 
 <div id="lockScreen">🔧 시스템 점검 중입니다.<br><small>관리자가 잠금을 해제하면 자동으로 다시 사용할 수 있습니다.</small></div>
 
@@ -762,10 +764,11 @@
                             <th>사용 기간<button type="button" class="sort-btn" id="psortPeriodBtn" onclick="sortPersonalHistory('period')">정렬↕</button></th>
                             <th>사용 일수</th>
                             <th>사유</th>
+                            <th>보고서</th>
                         </tr>
                     </thead>
                     <tbody id="personalHistoryBody">
-                        <tr><td colspan="5" style="color:#94a3b8;">사원을 선택해 주세요.</td></tr>
+                        <tr><td colspan="6" style="color:#94a3b8;">사원을 선택해 주세요.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1380,7 +1383,7 @@
         document.getElementById('p-education').innerText = `-`;
         document.getElementById('p-remaining').innerText = `-`;
         document.getElementById('personalTrashBtn').style.display = 'none';
-        document.getElementById('personalHistoryBody').innerHTML = `<tr><td colspan="5" style="color:#94a3b8;">사원을 선택해 주세요.</td></tr>`;
+        document.getElementById('personalHistoryBody').innerHTML = `<tr><td colspan="6" style="color:#94a3b8;">사원을 선택해 주세요.</td></tr>`;
     }
 
     function getBaseDate() {
@@ -1414,6 +1417,41 @@
         }
         const n = Y - joinYear;
         return Math.min(25, 15 + Math.floor((n - 1) / 2));
+    }
+
+    // 정산 값은 연도별로 보관 (기존 단일 값은 처음 계산할 때 현재 적용년도 값으로 옮김)
+    function getSettleVal(emp, Y) {
+        if (!emp.settlementByYear) {
+            emp.settlementByYear = {};
+            const legacy = parseFloat(emp.settlementLeave) || 0;
+            if (legacy) emp.settlementByYear[SYSTEM_BASE_YEAR] = legacy;
+        }
+        return parseFloat(emp.settlementByYear[Y]) || 0;
+    }
+
+    // 전년도 초과사용(마이너스 잔여)을 올해 발생연차에서 차감
+    function getCarryDeficit(emp, Y) {
+        const joinYear = new Date(emp.joinDate).getFullYear();
+        if (joinYear >= Y) return 0;
+        if (emp.retireDate && new Date(emp.retireDate).getFullYear() < Y) return 0;
+        const saved = SYSTEM_BASE_YEAR;
+        let prev;
+        try {
+            SYSTEM_BASE_YEAR = Y - 1;
+            prev = calculateLeaveDetails(emp);
+        } finally {
+            SYSTEM_BASE_YEAR = saved;
+        }
+        return prev.remaining < 0 ? -prev.remaining : 0;
+    }
+
+    // 이전년도 사용 옆에 덧붙일 (정산 · 전년 초과) 표시
+    function prevNoteText(res) {
+        const parts = [];
+        if (res.settlementLeave) parts.push(`정산 ${res.settlementLeave > 0 ? '+' : ''}${res.settlementLeave}`);
+        if (res.carryDeficit) parts.push(`전년 초과 ${res.carryDeficit}`);
+        if (res.remaining < 0) parts.push(`올해 초과 ${-res.remaining}`);
+        return parts.length ? `(${parts.join(' · ')})` : '';
     }
 
     function calculateLeaveDetails(emp) {
@@ -1500,8 +1538,9 @@
 
         let totalUsed = usedAnnual + (usedHalf * 0.5);
         if (includePrevUsed) totalUsed += effectivePrevUsed;
-        const settlementLeave = parseFloat(emp.settlementLeave) || 0;
-        const remaining = generatedLeave + settlementLeave - totalUsed;
+        const settlementLeave = getSettleVal(emp, Y);
+        const carryDeficit = includePrevUsed ? 0 : getCarryDeficit(emp, Y);
+        const remaining = generatedLeave + settlementLeave - carryDeficit - totalUsed;
 
         return {
             serviceYears,
@@ -1509,6 +1548,7 @@
             settleNote,
             generatedLeave,
             settlementLeave,
+            carryDeficit,
             effectivePrevUsed,
             isFirstYear,
             isOneYearExp,
@@ -1531,14 +1571,16 @@
         const serviceText = res.serviceYears < 1 ? '1년미만' : `${res.serviceYears}년차`;
         const settleVal = res.settlementLeave || 0;
         const settleStr = settleVal !== 0 ? (settleVal > 0 ? `+${settleVal}` : `${settleVal}`) : '0';
-        const totalGen = res.generatedLeave + settleVal;
+        const carry = res.carryDeficit || 0;
+        const totalGen = res.generatedLeave + settleVal - carry;
 
-        let subText = `${serviceText}(${res.generatedLeave}) | 정산(${settleStr}) (총 ${totalGen}개)`;
+        let subText = `${serviceText}(${res.generatedLeave}) | 정산(${settleStr})` + (carry ? ` | 전년 초과(-${carry})` : '') + ` (총 ${totalGen}개)`;
 
         document.getElementById('p-generated').innerText = `${totalGen}개`;
         document.getElementById('p-generated-sub').innerText = subText;
 
-        document.getElementById('p-prevUsed').innerText = `${res.effectivePrevUsed}개`;
+        const pn = prevNoteText(res);
+        document.getElementById('p-prevUsed').innerHTML = `${res.effectivePrevUsed}개` + (pn ? `<div style="font-size:11px; font-weight:normal; color:#c2410c; margin-top:2px;">${pn}</div>` : '');
         document.getElementById('p-usedAnnual').innerText = `${res.usedAnnual}개`;
         document.getElementById('p-usedHalf').innerText = `${res.usedHalf}회 (${res.usedHalf * 0.5}일)`;
         document.getElementById('p-substitute').innerText = `${res.substitute}개`;
@@ -1569,11 +1611,12 @@
                     <td>${h.start} ~ ${h.end}</td>
                     <td class="text-bold">${h.days}일</td>
                     <td>${h.reason}</td>
+                    <td><button type="button" class="action-btn" style="padding:3px 8px; font-size:11px;" onclick="openSavedReport(${emp.id}, ${(emp.history || []).indexOf(h)})">🖨 보고서</button></td>
                 `;
                 historyBody.appendChild(tr);
             });
         } else {
-            historyBody.innerHTML = `<tr><td colspan="5" style="color:#94a3b8;">${SYSTEM_BASE_YEAR}년도 사용 내역이 없습니다.</td></tr>`;
+            historyBody.innerHTML = `<tr><td colspan="6" style="color:#94a3b8;">${SYSTEM_BASE_YEAR}년도 사용 내역이 없습니다.</td></tr>`;
         }
     }
 
@@ -2000,9 +2043,9 @@
                 </td>
                 <td>${statusBadge}</td>
                 <td><input type="date" value="${emp.retireDate || ''}" class="table-date-input" onchange="updateEmpVal(${originalIndex}, 'retireDate', this.value)"></td>
-                <td class="text-bold">${res.generatedLeave}개</td>
+                <td class="text-bold">${res.generatedLeave}개${res.carryDeficit ? `<br><small class="text-red" style="font-weight:normal;">전년 초과 -${res.carryDeficit}</small>` : ''}</td>
                 <td class="settlement-col"><input type="number" step="0.5" value="${res.settlementLeave}" class="table-input" onchange="updateEmpVal(${originalIndex}, 'settlementLeave', this.value)"></td>
-                <td class="prev-year-col" style="background:#fff7ed;">${prevYearInput}</td>
+                <td class="prev-year-col" style="background:#fff7ed;">${prevYearInput}${prevNoteText(res) ? `<div style="font-size:10px; color:#c2410c; white-space:nowrap;">${prevNoteText(res)}</div>` : ''}</td>
                 <td class="annual-usage-col text-bold">${res.usedAnnual}</td>
                 <td class="half-usage-col text-bold">${res.usedHalf}</td>
                 <td class="substitute-usage-col text-bold">${res.substitute}</td>
@@ -2278,6 +2321,7 @@
         msg += `• 입사일: ${emp.joinDate}\n`;
         msg += `• 퇴사일: ${emp.retireDate}\n`;
         msg += `• 인정 전체 발생 연차: ${res.generatedLeave}개\n`;
+        if (res.carryDeficit) msg += `• 전년도 초과사용 차감: -${res.carryDeficit}개\n`;
         if (res.settleNote) msg += `• 산정 기준: ${res.settleNote}\n`;
         msg += `• 총 사용 차감: ${res.totalUsed}개\n`;
         msg += `-----------------------------------\n`;
@@ -2456,13 +2500,30 @@
     }
 
     function closeReportModal() {
-        document.getElementById('reportModal').classList.remove('active');
+        const m = document.getElementById('reportModal');
+        m.classList.remove('active');
+        m.querySelector('.rpt-save').style.display = '';
+        m.querySelector('.rpt-back').textContent = '← 수정하기';
         pendingApply = null;
+    }
+
+    // 저장된 신청 내역의 사용 보고서를 다시 열어 인쇄 (저장 버튼 없음)
+    function openSavedReport(empId, idx) {
+        const emp = employees.find(e => e.id === empId);
+        const h = emp && (emp.history || [])[idx];
+        if (!h) { alert('신청 내역을 찾을 수 없습니다.'); return; }
+        openReportModal({ emp, type: h.type, start: h.start, end: h.end || h.start, days: h.days, reason: h.reason || '' });
+        pendingApply = null;
+        document.getElementById('rptLeader').value = spaceName(h.reportLeader != null ? h.reportLeader : findTeamLeaderName(emp));
+        const m = document.getElementById('reportModal');
+        m.querySelector('.rpt-save').style.display = 'none';
+        m.querySelector('.rpt-back').textContent = '← 닫기';
     }
 
     function confirmReportSave() {
         if (!pendingApply) return;
-        const { emp, type, start, end, days, reason } = pendingApply;
+        const { type, start, end, days, reason } = pendingApply;
+        const emp = employees.find(e => e.id === pendingApply.emp.id) || pendingApply.emp;
         const reportLeader = document.getElementById('rptLeader').value.trim();
 
         if (!emp.history) emp.history = [];
@@ -2538,7 +2599,7 @@
         if (!firestoreEnabled || !firestoreDb) return false;
         try {
             const snap = await firestoreDb.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOCUMENT).get();
-            if (!snap.exists) return false;
+            if (!snap.exists) { cloudBase = { emps: {}, dels: {}, year: SYSTEM_BASE_YEAR }; return false; }
 
             const data = snap.data() || {};
             if (Array.isArray(data.employees)) {
@@ -2554,6 +2615,8 @@
                 const yearInput = document.getElementById('systemYearSelect');
                 if (yearInput) yearInput.value = SYSTEM_BASE_YEAR + '-12-31';
             }
+            cloudBase = { emps: mapOf(employees), dels: mapOf(deletedEmployees), year: SYSTEM_BASE_YEAR };
+            reportCloudSize(cloudBytes(employees, deletedEmployees), 'Firestore 연결됨');
             return true;
         } catch (e) {
             console.error('[Firestore] 데이터 불러오기 실패:', e);
@@ -2566,32 +2629,187 @@
         }
     }
 
-    async function syncToFirestore() {
-        if (!firestoreEnabled || !firestoreDb) return false;
-        try {
-            await firestoreDb.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOCUMENT).set({
-                employees: employees,
-                deletedEmployees: deletedEmployees,
-                systemBaseYear: SYSTEM_BASE_YEAR,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
+// ===== 동시 저장 충돌 방지 · 저장 실패 알림 · 문서 크기 확인 =====
+    const CLOUD_DOC_LIMIT = 1048576;   // Firestore 문서 한도 (1MiB)
+    let cloudBase = null;              // 클라우드와 마지막으로 맞춘 상태 (병합 기준)
+    let syncChain = Promise.resolve(true);
+    let syncRetry = 0, syncRetryTimer = null, cloudFailAlerted = false, lastCloudError = '';
+    let sizeWarned = false, bannerKind = '';
 
-            const status = document.getElementById('firestoreStatus');
-            if (status) {
-                status.textContent = '☁️ Firestore 저장됨';
-                status.style.color = '#059669';
+    // 키 순서와 관계없이 같은 내용이면 같은 문자열이 되도록 정렬해서 비교
+    function stable(v) {
+        if (Array.isArray(v)) return '[' + v.map(stable).join(',') + ']';
+        if (v && typeof v === 'object') return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + stable(v[k])).join(',') + '}';
+        return JSON.stringify(v);
+    }
+    function mapOf(list) {
+        const o = {};
+        (list || []).forEach(x => { o[String(x.id)] = stable(x); });
+        return o;
+    }
+    // 직원 단위 3자 병합: 기준(base) 대비 내가 바꾼 직원은 내 것, 남이 바꾼 직원은 클라우드 것
+    // 같은 직원을 동시에 바꾼 경우는 먼저 저장된 클라우드 내용을 유지하고 conflicts에 이름을 남김
+    function mergeList(baseMap, localList, remoteList, conflicts) {
+        const L = new Map(localList.map(x => [String(x.id), x]));
+        const R = new Map(remoteList.map(x => [String(x.id), x]));
+        const ids = [...R.keys(), ...[...L.keys()].filter(k => !R.has(k))];
+        const out = [];
+        ids.forEach(id => {
+            const b = baseMap ? baseMap[id] : undefined;
+            const l = L.get(id), r = R.get(id);
+            const ls = l ? stable(l) : undefined, rs = r ? stable(r) : undefined;
+            const lc = ls !== b, rc = rs !== b;
+            let pick;
+            if (!lc) pick = r;
+            else if (!rc || ls === rs) pick = l;
+            else { pick = r || l; conflicts.push((pick && pick.name) || id); }
+            if (pick) out.push(pick);
+        });
+        return out;
+    }
+    function cloudBytes(emps, dels) {
+        return new TextEncoder().encode(JSON.stringify({ employees: emps, deletedEmployees: dels })).length;
+    }
+
+    function showCloudBanner(kind, html) {
+        const el = document.getElementById('cloudBanner');
+        if (!el) return;
+        bannerKind = kind;
+        el.style.background = kind === 'error' ? '#dc2626' : '#f59e0b';
+        el.style.color = kind === 'error' ? '#fff' : '#1f2937';
+        el.innerHTML = html + ' <button type="button" onclick="exportBackup()" style="margin-left:8px;padding:2px 8px;cursor:pointer;">💾 백업 다운로드</button>'
+            + (kind === 'error' ? ' <button type="button" onclick="syncToFirestore()" style="padding:2px 8px;cursor:pointer;">🔄 다시 시도</button>' : '');
+        el.style.display = 'block';
+    }
+    function hideCloudBanner() {
+        const el = document.getElementById('cloudBanner');
+        if (el) el.style.display = 'none';
+        bannerKind = '';
+    }
+    function reportCloudSize(bytes, label) {
+        const pct = Math.round(bytes / CLOUD_DOC_LIMIT * 100), kb = Math.round(bytes / 1024);
+        const status = document.getElementById('firestoreStatus');
+        if (status && bannerKind !== 'error') {
+            status.textContent = `☁️ ${label} · 문서 ${kb}KB/1,024KB (${pct}%)`;
+            status.style.color = pct >= 80 ? '#d97706' : '#059669';
+        }
+        if (pct >= 80) {
+            if (bannerKind !== 'error') showCloudBanner('warn', `⚠️ 클라우드 데이터 크기가 ${kb}KB(한도의 ${pct}%)입니다. 1,024KB를 넘으면 저장되지 않으니 오래된 신청 이력·삭제함을 정리하거나 관리자에게 문의하세요.`);
+            if (pct >= 95 && !sizeWarned) {
+                sizeWarned = true;
+                alert(`클라우드 데이터 크기가 한도의 ${pct}%에 도달했습니다.\n곧 저장이 거부될 수 있으니 먼저 [백업 다운로드]를 받아 두고, 오래된 이력을 정리해 주세요.`);
+            }
+        } else if (bannerKind === 'warn') {
+            hideCloudBanner();
+        }
+    }
+    function cloudErrMsg(e) {
+        const code = (e && e.code) || '';
+        if (e && e.message === 'SIZE_LIMIT') return '데이터 크기가 Firestore 문서 한도(1MB)를 넘어 저장할 수 없습니다. 오래된 이력을 정리해 주세요.';
+        if (code.includes('permission-denied')) return '접근 권한이 없습니다. Firebase 보안 규칙을 확인해 주세요.';
+        if (code.includes('unavailable') || code.includes('deadline')) return '인터넷 연결을 확인해 주세요.';
+        if (code.includes('invalid-argument') || code.includes('resource-exhausted')) return '저장할 수 없는 값이 있거나 데이터 크기 한도를 넘었습니다.';
+        return (code || (e && e.message) || '알 수 없는 오류');
+    }
+
+    // 다른 PC의 변경이 섞여 들어왔을 때 메모리·화면에 반영 (그 사이 이 PC에서 바꾼 내용은 유지)
+    function applyPulled(local, merged) {
+        const curE = JSON.parse(JSON.stringify(employees)), curD = JSON.parse(JSON.stringify(deletedEmployees)), none = [];
+        employees = mergeList(mapOf(local.emps), curE, merged.emps, none);
+        deletedEmployees = mergeList(mapOf(local.dels), curD, merged.dels, none);
+        if (SYSTEM_BASE_YEAR === local.year && merged.year !== local.year) {
+            SYSTEM_BASE_YEAR = merged.year;
+            const yi = document.getElementById('systemYearSelect');
+            if (yi) yi.value = SYSTEM_BASE_YEAR + '-12-31';
+        }
+        safeLocalSet('annual_leave_employees', JSON.stringify(employees));
+        safeLocalSet('annual_leave_deleted_employees', JSON.stringify(deletedEmployees));
+        try {
+            renderDashboard();
+            if (authenticatedPersonalEmp) {
+                const e = employees.find(x => x.id === authenticatedPersonalEmp.id);
+                if (e) { authenticatedPersonalEmp = e; renderPersonalView(e); }
+            }
+        } catch (err) { console.warn('[Firestore] 화면 갱신 실패', err); }
+    }
+
+    async function doCloudSync() {
+        const ref = firestoreDb.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOCUMENT);
+        const local = { emps: JSON.parse(JSON.stringify(employees)), dels: JSON.parse(JSON.stringify(deletedEmployees)), year: SYSTEM_BASE_YEAR };
+        try {
+            let result = null;
+            await firestoreDb.runTransaction(async tx => {
+                const snap = await tx.get(ref);
+                const rd = snap.exists ? (snap.data() || {}) : null;
+                const conflicts = [];
+                let merged, same = false;
+                if (!rd) {
+                    merged = { emps: local.emps, dels: local.dels, year: local.year };
+                } else {
+                    const rEmps = Array.isArray(rd.employees) ? rd.employees : [];
+                    const rDels = Array.isArray(rd.deletedEmployees) ? rd.deletedEmployees : [];
+                    const rYear = Number.isFinite(Number(rd.systemBaseYear)) ? Number(rd.systemBaseYear) : local.year;
+                    merged = {
+                        emps: mergeList(cloudBase && cloudBase.emps, local.emps, rEmps, conflicts),
+                        dels: mergeList(cloudBase && cloudBase.dels, local.dels, rDels, conflicts),
+                        year: (!cloudBase || cloudBase.year === local.year) ? rYear : local.year
+                    };
+                    same = stable(merged.emps) === stable(rEmps) && stable(merged.dels) === stable(rDels) && merged.year === rYear;
+                }
+                const bytes = cloudBytes(merged.emps, merged.dels);
+                if (!same) {
+                    if (bytes >= CLOUD_DOC_LIMIT * 0.99) throw new Error('SIZE_LIMIT');
+                    tx.set(ref, {
+                        employees: merged.emps,
+                        deletedEmployees: merged.dels,
+                        systemBaseYear: merged.year,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                }
+                result = { merged, conflicts, bytes };
+            });
+
+            const { merged, conflicts, bytes } = result;
+            const pulled = stable(merged.emps) !== stable(local.emps) || stable(merged.dels) !== stable(local.dels) || merged.year !== local.year;
+            cloudBase = { emps: mapOf(merged.emps), dels: mapOf(merged.dels), year: merged.year };
+            if (pulled) applyPulled(local, merged);
+
+            syncRetry = 0; cloudFailAlerted = false; lastCloudError = '';
+            if (bannerKind === 'error') hideCloudBanner();
+            reportCloudSize(bytes, 'Firestore 저장됨');
+            if (conflicts.length) {
+                alert(`다른 PC에서 같은 직원 정보가 동시에 수정되었습니다.\n먼저 저장된 내용이 유지되었고, 이 PC에서 입력한 변경은 반영되지 않았습니다.\n해당 직원: ${[...new Set(conflicts)].join(', ')}\n\n내용을 확인한 뒤 다시 입력해 주세요.`);
             }
             return true;
         } catch (e) {
             console.error('[Firestore] 저장 실패:', e);
+            lastCloudError = cloudErrMsg(e);
             const status = document.getElementById('firestoreStatus');
-            if (status) {
-                status.textContent = '☁️ 저장 오류';
-                status.style.color = '#dc2626';
+            if (status) { status.textContent = '☁️ 저장 오류'; status.style.color = '#dc2626'; }
+            showCloudBanner('error', `⚠️ 클라우드 저장에 실패했습니다. 다른 PC에는 아직 반영되지 않았습니다. (사유: ${lastCloudError})`);
+            if (!cloudFailAlerted) {
+                cloudFailAlerted = true;
+                alert('클라우드 저장에 실패했습니다.\n사유: ' + lastCloudError + '\n\n이 PC 브라우저에는 저장되어 있습니다. 화면 위 안내에서 [백업 다운로드]를 받아 두세요.');
+            }
+            if (syncRetry < 3) {
+                syncRetry++;
+                clearTimeout(syncRetryTimer);
+                syncRetryTimer = setTimeout(() => syncToFirestore(), 15000 * syncRetry);
             }
             return false;
         }
     }
+
+    function syncToFirestore() {
+        if (!firestoreEnabled || !firestoreDb) return Promise.resolve(false);
+        syncChain = syncChain.then(doCloudSync, doCloudSync);   // 저장 요청은 한 번에 하나씩 차례대로
+        return syncChain;
+    }
+
+    // 다른 PC에서 저장한 내용을 창으로 돌아올 때 가져옴
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && firestoreEnabled && cloudBase) syncToFirestore();
+    });
 
     // 브라우저 저장 공간(5MB)이 가득 차도 오류로 멈추지 않도록 보호
     function safeLocalSet(key, value) {
@@ -3243,7 +3461,7 @@
             const ok = await syncToFirestore();
             alert(ok
                 ? '데이터가 브라우저와 Google Firestore에 저장되었습니다.'
-                : '브라우저에는 저장되었습니다. Firestore 저장에 실패했습니다.');
+                : '브라우저에는 저장되었습니다. Firestore 저장에 실패했습니다.\n사유: ' + (lastCloudError || '알 수 없음'));
         } else {
             alert('데이터가 브라우저 저장소에 안전하게 저장되었습니다.\n\n※ Firebase 설정을 입력하면 Google Firestore에도 저장됩니다.');
         }
@@ -3325,7 +3543,12 @@
     }
 
     function updateEmpVal(index, key, val) {
-        if (key === 'prevYearUsed' || key === 'settlementLeave') {
+        if (key === 'settlementLeave') {
+            const v = parseFloat(val) || 0;
+            getSettleVal(employees[index], SYSTEM_BASE_YEAR);
+            employees[index].settlementByYear[SYSTEM_BASE_YEAR] = v;
+            employees[index].settlementLeave = v;
+        } else if (key === 'prevYearUsed') {
             employees[index][key] = parseFloat(val) || 0;
         } else {
             employees[index][key] = val;

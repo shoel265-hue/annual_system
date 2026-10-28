@@ -672,12 +672,14 @@
                             <option value="오후반차">오후 반차 (0.5일)</option>
                             <option value="대체휴가">대체휴가 (차감제외)</option>
                             <option value="대체반차">대체 반차 (0.5일/차감제외)</option>
-                            <option value="경조휴가">경조휴가 (차감제외)</option>
+                            <option value="축휴">축휴 (차감제외)</option>
+                            <option value="조휴">조휴 (차감제외)</option>
                             <option value="교육">교육 (1일/차감제외)</option>
                             <option value="교육오전반차">교육 오전반차 (0.5일/차감제외)</option>
                             <option value="교육오후반차">교육 오후반차 (0.5일/차감제외)</option>
                         </select>
                     </div>
+
                     <div class="form-group">
                         <label>시작일</label>
                         <input type="date" id="applyStart" onchange="calculateApplyDays()" required>
@@ -737,7 +739,7 @@
                     <div class="value" id="p-substitute">-</div>
                 </div>
                 <div class="summary-card">
-                    <div class="title">경조 휴가</div>
+                    <div class="title">축휴·조휴</div>
                     <div class="value" id="p-congrat">-</div>
                 </div>
                 <div class="summary-card">
@@ -903,7 +905,7 @@
                         <th class="annual-usage-col">사용연차</th>
                         <th class="half-usage-col">사용반차</th>
                         <th class="substitute-usage-col">대체휴가(차감제외)</th>
-                        <th class="congrat-usage-col">축휴(경조)</th>
+                        <th class="congrat-usage-col">축휴·조휴</th>
                         <th class="edu-usage-col">교육</th>
                         <th>차감합계</th>
                         <th>남은연차</th>
@@ -1387,6 +1389,24 @@
         }
     }
 
+    // 예전에 '경조휴가'로 저장된 신청 내역을 사유에 따라 '조휴' 또는 '축휴'로 변환 (변환 후 저장되면 다시 실행되지 않음)
+    function normalizeCongratTypes() {
+        const changed = [];
+        employees.forEach(emp => {
+            (emp.history || []).forEach(h => {
+                if (h.type !== '경조휴가') return;
+                const kind = (h.congratKind === '조휴' || h.congratKind === '축휴') ? h.congratKind : detectCongratKind(h.reason);
+                h.type = kind;
+                delete h.congratKind;
+                changed.push(`${emp.name} ${h.start}${h.end && h.end !== h.start ? '~' + h.end : ''} → ${kind}` + (h.reason ? ` (사유: ${h.reason})` : ''));
+            });
+        });
+        if (changed.length) {
+            alert(`예전 '경조휴가' ${changed.length}건을 사유에 따라 조휴/축휴로 바꿨습니다.\n\n` + changed.join('\n') + `\n\n잘못 바뀐 건은 취소 후 다시 신청해 주세요.`);
+        }
+        return changed.length;
+    }
+
     function resetApplyForm() {
         authenticatedApplyEmp = null;
         document.getElementById('applyEmpSelect').value = '';
@@ -1544,7 +1564,7 @@
                     else if (h.type.includes('반차') && !h.type.includes('대체') && !h.type.includes('교육')) usedHalf += 1;
                     else if (h.type === '교육오전반차' || h.type === '교육오후반차') { education += h.days; }
                     else if (h.type.includes('대체')) substitute += h.days;
-                    else if (h.type === '경조휴가') congrat += h.days;
+                    else if (isCongratType(h.type)) congrat += h.days;
                     else if (h.type === '교육') education += h.days;
                 } else if (hYear < Y) {
                     if (h.type === '연차') prevYearUsedSum += h.days;
@@ -2112,7 +2132,9 @@
                                     <option value="annual">연차</option>
                                     <option value="half">반차</option>
                                     <option value="substitute">대체휴가</option>
-                                    <option value="congrat">경조휴가</option>
+                                    <option value="congrat">축휴·조휴 전체</option>
+                                    <option value="chukhyu">축휴</option>
+                                    <option value="johyu">조휴</option>
                                     <option value="education">교육</option>
                                 </select>
                                 <button class="action-btn blue" type="button" style="padding:4px 10px; font-size:12px;" onclick="filterDashboardHistory(${emp.id})">조회</button>
@@ -2213,7 +2235,8 @@
         type = String(type || '');
         if (type.includes('반차')) return '#8b5cf6';
         if (type.includes('대체')) return '#10b981';
-        if (type.includes('경조')) return '#f59e0b';
+        if (type === '조휴') return '#64748b';
+        if (type.includes('경조') || type === '축휴') return '#f59e0b';
         if (type.includes('교육')) return '#0284c7';
         return '#3b82f6';
     }
@@ -2293,7 +2316,9 @@
                 || (selectedType === 'annual' && h.type === '연차')
                 || (selectedType === 'half' && h.type.includes('반차') && !h.type.includes('대체') && !h.type.includes('교육'))
                 || (selectedType === 'substitute' && h.type.includes('대체'))
-                || (selectedType === 'congrat' && h.type === '경조휴가')
+                || (selectedType === 'congrat' && isCongratType(h.type))
+                || (selectedType === 'chukhyu' && h.type === '축휴')
+                || (selectedType === 'johyu' && h.type === '조휴')
                 || (selectedType === 'education' && h.type.includes('교육'));
             return overlapsPeriod && typeMatches;
         });
@@ -2436,7 +2461,7 @@
             return;
         }
 
-        const isDeductionTarget = !type.includes('대체') && type !== '경조휴가' && !type.includes('교육');
+        const isDeductionTarget = !type.includes('대체') && !isCongratType(type) && !type.includes('교육');
         if (isDeductionTarget) {
             const res = calculateLeaveDetails(emp);
             if (days > res.remaining) {
@@ -2482,12 +2507,24 @@
 
     let pendingApply = null;
 
-    function mapReportType(type) {
+    // 축휴·조휴 (예전 '경조휴가'도 같은 경조 구분으로 취급)
+    function isCongratType(t) { return t === '축휴' || t === '조휴' || t === '경조휴가'; }
+
+    // 예전 '경조휴가'는 사유 글자로 조휴/축휴를 판별 (판별 불가 시 축휴)
+    function detectCongratKind(reason) {
+        const r = String(reason || '');
+        if (/조휴|장례|부고|조문|별세|사망|발인|상중|(?:부친|모친|빙부|빙모|부모|조부모|조부|조모|외조부|외조모|장인|장모|시부모|시부|시모|배우자|형제|자매|자녀|아들|딸|처|남편|아내|부|모)상/.test(r)) return '조휴';
+        if (/축휴|결혼|혼인|출산|돌잔치|회갑|칠순|축하/.test(r)) return '축휴';
+        return '축휴';
+    }
+
+    function mapReportType(type, reason) {
         if (type.includes('교육')) return '교육';
         if (type === '연차') return '연차';
         if (type === '오전반차' || type === '오후반차') return '반차';
         if (type.includes('대체')) return '대체';
-        if (type === '경조휴가') return '축휴';
+        if (type === '축휴' || type === '조휴') return type;
+        if (type === '경조휴가') return detectCongratKind(reason);
         return '연차';
     }
 
@@ -2507,7 +2544,7 @@
     function openReportModal(data) {
         pendingApply = data;
         const { emp, type, start, end, days, reason } = data;
-        const rptType = mapReportType(type);
+        const rptType = mapReportType(type, reason);
 
         document.getElementById('rptType').innerText = rptType;
         document.querySelectorAll('#reportModal .rpt-intro .opt').forEach(o => {
@@ -3169,7 +3206,7 @@
         days: ['일수', '사용일수', '사용연차', '차감일수'],
         reason: ['사유', '비고', '내용']
     };
-    const USAGE_TYPES = ['연차', '오전반차', '오후반차', '대체휴가', '대체반차', '경조휴가', '교육', '교육오전반차', '교육오후반차'];
+    const USAGE_TYPES = ['연차', '오전반차', '오후반차', '대체휴가', '대체반차', '경조휴가', '축휴', '조휴', '교육', '교육오전반차', '교육오후반차'];
     const USAGE_TYPE_ALIAS = {
         '반차': '오전반차', '오전': '오전반차', '오후': '오후반차',
         '대체휴무': '대체휴가', '대휴': '대체휴가', '대체': '대체휴가',
@@ -3399,7 +3436,7 @@
         if (rows.length < 2) { alert('데이터가 없습니다.'); return; }
 
         const h0 = rows[0].map(h => normHeader(h));
-        const wideLabels = ['연차', '반차', '오전반차', '오후반차', '대체휴가', '대체반차', '경조휴가', '교육'];
+        const wideLabels = ['연차', '반차', '오전반차', '오후반차', '대체휴가', '대체반차', '경조휴가', '축휴', '조휴', '교육'];
         if (h0.some(h => wideLabels.includes(h)) && findUsageColumns(rows[0]).start === undefined) {
             importUsageWide(rows);
             return;
@@ -4065,6 +4102,7 @@
         }
 
         ensureEmployeeNumbers();
+        normalizeCongratTypes();
         saveDataSilent();
         handleTeamChange();
         renderDashboard();

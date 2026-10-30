@@ -2216,12 +2216,21 @@
         renderPersonalView(authenticatedPersonalEmp);
     }
 
+    // 신청 접수 일시: 신청 화면에서 저장한 내역은 신청 번호(id)가 저장한 순간의 시각이라 그대로 일시로 변환
+    // (엑셀 일괄 등록분처럼 순번만 있는 내역은 '-')
+    function submittedAtText(h) {
+        const t = Number(h && h.id);
+        if (!(t >= 1.5e12 && t <= 4e12)) return '-';
+        const d = new Date(t), p2 = n => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+    }
+
     function detailHeadHtml(empId) {
         const st = detailSort[empId];
         return '<tr><th>번호</th>'
             + '<th>구분<button type="button" class="sort-btn" onclick="toggleDetailSort(' + empId + ",'type')\">정렬" + sortArrow(st, 'type') + '</button></th>'
             + '<th>사용 기간<button type="button" class="sort-btn" onclick="toggleDetailSort(' + empId + ",'period')\">정렬" + sortArrow(st, 'period') + '</button></th>'
-            + '<th>사용 일수</th><th>사유</th><th>관리</th></tr>';
+            + '<th>사용 일수</th><th>사유</th><th style="width:1%;">접수일시</th><th style="width:1%;">관리</th></tr>';
     }
 
     function toggleDetailSort(empId, key) {
@@ -2327,7 +2336,7 @@
         if (st && st.key) sortHistoryList(filteredHistory, st.key, st.dir);
 
         if (filteredHistory.length === 0) {
-            return { html: '<tr><td colspan="6" style="color:#94a3b8;">선택한 기간과 휴가 구분에 해당하는 내역이 없습니다.</td></tr>', count: 0 };
+            return { html: '<tr><td colspan="7" style="color:#94a3b8;">선택한 기간과 휴가 구분에 해당하는 내역이 없습니다.</td></tr>', count: 0 };
         }
 
         const html = filteredHistory.map((h, index) => {
@@ -2338,6 +2347,7 @@
                     <td>${h.start} ~ ${h.end}</td>
                     <td>${h.days}일</td>
                     <td>${h.reason}</td>
+                    <td style="font-size:11px; color:#475569; white-space:nowrap; width:1%;">${submittedAtText(h)}</td>
                     <td><button class="btn-cancel-item" onclick="cancelLeaveItem(${emp.id}, ${h.id})">취소</button></td>
                 </tr>
             `;

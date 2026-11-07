@@ -1975,6 +1975,7 @@
         const tbody = document.getElementById('dashboardTableBody');
         tbody.innerHTML = '';
 
+        autoSortEmployees();
         let processedList = employees.map((emp, originalIndex) => {
             const res = calculateLeaveDetails(emp);
             return { emp, res, originalIndex, displayNo: emp.no };
@@ -2398,7 +2399,42 @@
         alert(msg);
     }
 
+    // 부서 순서 → 직급 순서(소장>팀장>주임>반장>기사) → 입사일 순서로 정렬하고 번호를 다시 매김
+    function autoSortEmployees() {
+        const POS_RANK = { "소장": 1, "팀장": 2, "주임": 3, "반장": 4, "기사": 5 };
+
+        function getPosRank(pos) {
+            const p = String(pos || '');
+            for (const key in POS_RANK) {
+                if (p.includes(key)) return POS_RANK[key];
+            }
+            return 99;
+        }
+
+        function getDeptRank(dept) {
+            const idx = DEPARTMENT_LIST.indexOf(dept);
+            return idx !== -1 ? idx : 999;
+        }
+
+        employees.sort((a, b) => {
+            const deptDiff = getDeptRank(a.dept) - getDeptRank(b.dept);
+            if (deptDiff !== 0) return deptDiff;
+
+            const rankDiff = getPosRank(a.position) - getPosRank(b.position);
+            if (rankDiff !== 0) return rankDiff;
+
+            const dateA = a.joinDate || '9999-12-31';
+            const dateB = b.joinDate || '9999-12-31';
+            return dateA.localeCompare(dateB);
+        });
+
+        employees.forEach((emp, idx) => {
+            emp.no = idx + 1;
+        });
+    }
+
     function populateEmpSelectOptions(selectedTeam = "소방팀") {
+        autoSortEmployees();
         const applySelect = document.getElementById('applyEmpSelect');
         const personalSelect = document.getElementById('personalEmpSelect');
 
@@ -3915,7 +3951,7 @@
         employees.push(newEmp);
         saveDataSilent();
         renderDashboard();
-        alert(`${newEmp.name} 사원이 등록되었습니다. (번호: ${no}번)`);
+        alert(`${newEmp.name} 사원이 등록되었습니다. (번호: ${newEmp.no}번, 직급·입사일 기준 자동 정렬)`);
         document.getElementById('newName').value = '';
         document.getElementById('newBirth').value = '';
         delete document.getElementById('newNo').dataset.dirty;

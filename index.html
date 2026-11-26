@@ -2583,7 +2583,8 @@
         const pos = String(emp.position || '');
         if (pos.includes('소장')) return '';          // 관리소장 신청: 팀장 이름 없음
         if (pos.includes('팀장')) return emp.name;     // 팀장 본인 신청: 본인 이름
-        const leader = employees.find(e => e.dept === emp.dept && !e.retireDate && String(e.position || '').includes('팀장'));
+        const leaderDept = emp.dept === '냉동' ? '설비팀' : emp.dept;
+        const leader = employees.find(e => e.dept === leaderDept && !e.retireDate && String(e.position || '').includes('팀장'));
         return leader ? leader.name : '';
     }
 

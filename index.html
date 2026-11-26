@@ -193,14 +193,46 @@
             border-radius: 4px;
         }
 
-        details.fold-box > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px; user-select: none; }
+        details.fold-box > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px; user-select: none; flex-wrap: wrap; }
         details.fold-box > summary::-webkit-details-marker { display: none; }
         details.fold-box > summary::before { content: '▶'; font-size: 13px; color: #64748b; transition: transform 0.15s; }
         details.fold-box[open] > summary::before { transform: rotate(90deg); }
         details.fold-box > summary h2 { margin: 0; }
-        details.fold-box > summary::after { content: '클릭하여 펼치기'; font-size: 12px; color: #94a3b8; font-weight: normal; }
-        details.fold-box[open] > summary::after { content: '클릭하여 접기'; }
+        details.fold-box > summary .fold-hint { font-size: 12px; color: #94a3b8; font-weight: normal; }
+        details.fold-box > summary .fold-hint::after { content: '클릭하여 펼치기'; }
+        details.fold-box[open] > summary .fold-hint::after { content: '클릭하여 접기'; }
         details.fold-box .fold-body { margin-top: 14px; }
+
+        .otp-issue-btn {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            border: 1px solid #f59e0b;
+            background: #fffbeb;
+            color: #b45309;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+            transition: all 0.15s;
+        }
+        .otp-issue-btn:hover { background: #fef3c7; border-color: #d97706; }
+
+        .otp-code-display {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: 8px;
+            color: #1d4ed8;
+            background: #eff6ff;
+            border: 2px dashed #60a5fa;
+            border-radius: 10px;
+            padding: 14px 10px 14px 18px;
+            margin: 12px 0;
+            user-select: all;
+        }
 
         .btn-group { margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end; }
         .btn { padding: 9px 18px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; }
@@ -850,7 +882,11 @@
 
         <div class="card">
             <details class="fold-box">
-                <summary><h2>📥 엑셀 일괄 등록 (직원 명부 / 연차 사용내역)</h2></summary>
+                <summary>
+                    <h2>📥 엑셀 일괄 등록 (직원 명부 / 연차 사용내역)</h2>
+                    <span class="fold-hint"></span>
+                    <button type="button" class="otp-issue-btn" onclick="event.preventDefault(); event.stopPropagation(); openOneTimeCodeModal();">🔑 1회용 승인코드 발급</button>
+                </summary>
                 <div class="fold-body">
                     <p style="font-size:13px; color:#64748b; margin-bottom:8px; line-height:1.6;">
                         <b style="color:#334155;">[직원 명부]</b> 첫 줄에 제목(번호, 부서/팀, 이름, 직급, 주민번호 또는 생년월일, 입사일, 퇴사일, 구분, 이전년도 사용)을 두고 둘째 줄부터 직원 정보를 입력한 .xlsx 또는 .csv 파일을 올려 주세요.<br>
@@ -1054,6 +1090,20 @@
         <div style="display: flex; gap: 10px; justify-content: center;">
             <button class="btn btn-secondary" onclick="closeAdminModal()">취소</button>
             <button class="btn btn-primary" onclick="checkAdminPassword()">확인</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="otpModal">
+    <div class="modal-box" style="width: 390px;">
+        <h3 style="margin-bottom:8px; color:#1e293b;">🔑 1회용 승인코드 발급</h3>
+        <p style="font-size: 13px; color: #64748b; line-height: 1.5;">잔여 연차 초과 신청 시 1회 사용할 수 있는 승인코드입니다.<br>사용 완료 시 즉시 폐기됩니다.</p>
+        <div class="otp-code-display" id="otpCodeDisplay">------</div>
+        <div id="otpIssuedMeta" style="font-size: 12px; color: #475569; margin-bottom: 16px;">발급 시각: -</div>
+        <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary" onclick="copyOneTimeCode()">📋 코드 복사</button>
+            <button type="button" class="btn" style="background:#f59e0b; color:#fff;" onclick="generateOneTimeCode(true)">🔄 새 코드 재발급</button>
+            <button type="button" class="btn btn-secondary" onclick="closeOtpModal()">닫기</button>
         </div>
     </div>
 </div>
@@ -2507,20 +2557,24 @@
             return;
         }
 
+        let usedOtpCode = false;
         const isDeductionTarget = !type.includes('대체') && !isCongratType(type) && !type.includes('교육');
         if (isDeductionTarget) {
             const res = calculateLeaveDetails(emp);
             if (days > res.remaining) {
-                const inputPin = prompt("연차 사용 초과 입니다 관리자에게 문의 하세요\n\n(관리자 승인 번호를 입력하면 신청이 가능합니다)");
+                const inputPin = prompt("연차 사용 초과 입니다. 관리자에게 문의하세요.\n\n(관리자가 발급한 1회용 승인코드 6자리를 입력하면 신청이 가능합니다)");
                 if (inputPin === null) return;
-                if (inputPin !== '1234') {
-                    alert("관리자 승인 번호가 일치하지 않습니다. 신청이 취소됩니다.");
+                const trimmedPin = inputPin.trim();
+                const activeCode = getActiveOneTimeCode();
+                if (!trimmedPin || !activeCode || trimmedPin !== activeCode) {
+                    alert("유효한 1회용 승인코드가 아니거나 이미 사용된 코드입니다.\n관리자에게 새 승인코드를 발급받으세요.");
                     return;
                 }
+                usedOtpCode = true;
             }
         }
 
-        openReportModal({ emp, type, start, end, days, reason });
+        openReportModal({ emp, type, start, end, days, reason, usedOtpCode });
     }
 
     function leaveSlots(type) {
@@ -2632,11 +2686,100 @@
         m.querySelector('.rpt-back').textContent = '← 닫기';
     }
 
+    let oneTimeApproval = null; // { code: '123456', issuedAt: '2026-11-26 09:50' }
+
+    function getActiveOneTimeCode() {
+        if (oneTimeApproval && oneTimeApproval.code) return String(oneTimeApproval.code).trim();
+        try {
+            const raw = localStorage.getItem('annual_leave_otp');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.code) {
+                    oneTimeApproval = parsed;
+                    return String(parsed.code).trim();
+                }
+            }
+        } catch (e) {}
+        return '';
+    }
+
+    function saveOneTimeApprovalState(obj) {
+        oneTimeApproval = obj;
+        if (obj) {
+            safeLocalSet('annual_leave_otp', JSON.stringify(obj));
+        } else {
+            try { localStorage.removeItem('annual_leave_otp'); } catch (e) {}
+        }
+        if (firestoreEnabled && firestoreDb) {
+            firestoreDb.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOCUMENT).set({
+                oneTimeApproval: obj || null,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true }).catch(err => console.warn('[Firestore] 승인코드 동기화 실패:', err));
+        }
+    }
+
+    function generateOneTimeCode(forceNew = false) {
+        if (!forceNew && getActiveOneTimeCode()) {
+            updateOtpModalView();
+            return;
+        }
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        const now = new Date();
+        const issuedAt = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+        saveOneTimeApprovalState({ code, issuedAt });
+        updateOtpModalView();
+    }
+
+    function updateOtpModalView() {
+        const displayEl = document.getElementById('otpCodeDisplay');
+        const metaEl = document.getElementById('otpIssuedMeta');
+        if (!displayEl || !metaEl) return;
+        if (oneTimeApproval && oneTimeApproval.code) {
+            displayEl.textContent = oneTimeApproval.code;
+            metaEl.textContent = `발급 시각: ${oneTimeApproval.issuedAt || '-'} (미사용 · 1회 사용 후 자동 폐기)`;
+        } else {
+            displayEl.textContent = '------';
+            metaEl.textContent = '발급된 코드가 없습니다.';
+        }
+    }
+
+    function openOneTimeCodeModal() {
+        generateOneTimeCode(false);
+        document.getElementById('otpModal').classList.add('active');
+    }
+
+    function closeOtpModal() {
+        document.getElementById('otpModal').classList.remove('active');
+    }
+
+    function copyOneTimeCode() {
+        const code = getActiveOneTimeCode();
+        if (!code) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(code).then(() => {
+                alert(`1회용 승인코드 [${code}]가 클립보드에 복사되었습니다.`);
+            }).catch(() => {
+                alert(`1회용 승인코드: ${code}`);
+            });
+        } else {
+            alert(`1회용 승인코드: ${code}`);
+        }
+    }
+
+    function consumeOneTimeCode() {
+        saveOneTimeApprovalState(null);
+        updateOtpModalView();
+    }
+
     function confirmReportSave() {
         if (!pendingApply) return;
-        const { type, start, end, days, reason } = pendingApply;
+        const { type, start, end, days, reason, usedOtpCode } = pendingApply;
         const emp = employees.find(e => e.id === pendingApply.emp.id) || pendingApply.emp;
         const reportLeader = document.getElementById('rptLeader').value.trim();
+
+        if (usedOtpCode) {
+            consumeOneTimeCode();
+        }
 
         if (!emp.history) emp.history = [];
         emp.history.push({ id: Date.now(), type, start, end, days, reason, reportLeader });
@@ -2726,6 +2869,13 @@
                 SYSTEM_BASE_YEAR = Number(data.systemBaseYear);
                 const yearInput = document.getElementById('systemYearSelect');
                 if (yearInput) yearInput.value = SYSTEM_BASE_YEAR + '-12-31';
+            }
+            if (data.oneTimeApproval && data.oneTimeApproval.code) {
+                oneTimeApproval = data.oneTimeApproval;
+                safeLocalSet('annual_leave_otp', JSON.stringify(oneTimeApproval));
+            } else if ('oneTimeApproval' in data && data.oneTimeApproval === null) {
+                oneTimeApproval = null;
+                try { localStorage.removeItem('annual_leave_otp'); } catch (e) {}
             }
             cloudBase = { emps: mapOf(employees), dels: mapOf(deletedEmployees), year: SYSTEM_BASE_YEAR };
             reportCloudSize(cloudBytes(employees, deletedEmployees), 'Firestore 연결됨');
@@ -2920,7 +3070,10 @@
 
     // 다른 PC에서 저장한 내용을 창으로 돌아올 때 가져옴
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && firestoreEnabled && cloudBase) syncToFirestore();
+        if (!document.hidden && firestoreEnabled && cloudBase) {
+            syncToFirestore();
+            loadDataFromFirestore();
+        }
     });
 
     // 브라우저 저장 공간(5MB)이 가득 차도 오류로 멈추지 않도록 보호

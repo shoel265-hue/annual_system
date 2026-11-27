@@ -2531,6 +2531,31 @@
         }
     }
 
+    // 입사일부터 기준일까지 만근한 개월 수 (1개월 단위, 월 중 입사일 기준)
+    function getFullMonthsWorked(joinDateStr, refDateStr) {
+        const j = new Date(joinDateStr + 'T00:00:00');
+        const r = new Date(refDateStr + 'T00:00:00');
+        let m = (r.getFullYear() - j.getFullYear()) * 12 + (r.getMonth() - j.getMonth());
+        if (r.getDate() < j.getDate()) m--;
+        return Math.max(0, m);
+    }
+
+    // 1년 미만(회계/1년미만) 직원: 입사 연도 안에서는 만근한 개월 수(1개월당 1개)만큼만 사용 가능
+    // 총부여 개수(getFullYearGrant)는 변경하지 않고, 사용 가능 한도만 제한한다.
+    function isMonthlyLimitExceeded(emp, start, days) {
+        if (getCategory(emp) !== '회계/1년미만') return false;
+        const joinYear = new Date(emp.joinDate + 'T00:00:00').getFullYear();
+        if (new Date(start + 'T00:00:00').getFullYear() !== joinYear) return false;
+        const earned = getFullMonthsWorked(emp.joinDate, start);
+        const used = (emp.history || []).reduce((sum, h) => {
+            const isDeduct = h.type === '연차' || (h.type.includes('반차') && !h.type.includes('대체') && !h.type.includes('교육'));
+            if (!isDeduct) return sum;
+            if (new Date(h.start + 'T00:00:00').getFullYear() !== joinYear) return sum;
+            return sum + (parseFloat(h.days) || 0);
+        }, 0);
+        return used + days > earned;
+    }
+
     function handleApplySubmit(e) {
         e.preventDefault();
 
@@ -2551,6 +2576,11 @@
             return;
         }
 
+        if (emp.joinDate && start < emp.joinDate) {
+            alert(`입사일(${emp.joinDate}) 이전 날짜로는 연차를 신청할 수 없습니다.\n\n신청 시작일을 확인해 주세요.`);
+            return;
+        }
+
         const dup = findDuplicateLeave(emp, type, start, end);
         if (dup) {
             alert(`이미 신청된 휴가와 날짜가 겹칩니다.\n\n[기존 신청] ${dup.type} (${dup.start} ~ ${dup.end})\n\n날짜를 확인해 주세요.`);
@@ -2561,8 +2591,9 @@
         const isDeductionTarget = !type.includes('대체') && !isCongratType(type) && !type.includes('교육');
         if (isDeductionTarget) {
             const res = calculateLeaveDetails(emp);
-            if (days > res.remaining) {
-                const inputPin = prompt("연차 사용 초과 입니다. 관리자에게 문의하세요.\n\n(관리자가 발급한 1회용 승인코드 6자리를 입력하면 신청이 가능합니다)");
+            const monthlyOver = isMonthlyLimitExceeded(emp, start, days);
+            if (days > res.remaining || monthlyOver) {
+                const inputPin = prompt("연차 사용 초과 입니다(잔여 연차 또는 1년 미만 만근 개수 초과). 관리자에게 문의하세요.\n\n(관리자가 발급한 1회용 승인코드 6자리를 입력하면 신청이 가능합니다)");
                 if (inputPin === null) return;
                 const trimmedPin = inputPin.trim();
                 const activeCode = getActiveOneTimeCode();
